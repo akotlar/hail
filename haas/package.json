@@ -1,0 +1,15 @@
+{
+  "name": "root",
+  "private": true,
+  "scripts": {
+    "bootstrap": "lerna exec npm install",
+    "build": "lerna exec npm run build",
+    "start": "lerna exec npm run start",
+    "publish": "lerna publish --force-publish",
+    "test": "lerna run test"
+  },
+  "devDependencies": {
+    "lerna": "^3.5.1"
+  },
+  "dependencies": {}
+}
