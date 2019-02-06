@@ -8,9 +8,11 @@ import random
 import threading
 import humanize
 import logging
-from sanic import Sanic
-from sanic.response import text, json, html
-from sanic_cors import CORS
+from starlette.applications import Starlette
+from starlette.responses import UJSONResponse, Response, PlainTextResponse, HTMLResponse
+from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
+import uvicorn
 from jinja2 import Environment, PackageLoader, select_autoescape
 import ujson
 
@@ -64,66 +66,67 @@ repos = {
     'cloudtools': 'Nealelab/cloudtools'
 }
 
-app = Sanic(__name__)
-CORS(app, resources={r'/json/*': {'origins': '*'}})
+app = Starlette(__name__)
+app.debug = False
+app.add_middleware(CORSMiddleware, allow_origins=['*'])
 
-fav_path = os.path.join(os.path.dirname(__file__), 'static', 'favicon.ico')
-app.static('/favicon.ico', fav_path)
+# fav_path = os.path.join(os.path.dirname(__file__), 'static', 'favicon.ico')
+# app.static('/favicon.ico', fav_path)
 
 ########### Global variables that are modified in a separate thread ############
 # Must be only read, never written in parent thread, else need to use Lock()
 # http://effbot.org/zone/thread-synchronization.htm#synchronizing-access-to-shared-resources
-data=None
-users_data=None
-users_json=None
-timsetamp=None
+data = None
+users_data = None
+users_json = None
+timsetamp = None
 ################################################################################
 
 
 @app.route('/')
 async def index(request):
-    user_data, unassigned, urgent_issues=users_data
+    user_data, unassigned, urgent_issues = users_data
 
-    # Read timestamp as quickly as possible in case timestamp gets modified
-    # by forever_poll thread
-    cur_timestamp=timestamp
-    updated=humanize.naturaltime(
-        datetime.datetime.now() - datetime.timedelta(seconds=time.time() - cur_timestamp))
+    updated = get_update_time()
 
-    random_user=random.choice(users)
+    random_user = random.choice(users)
 
-    tmpl=await users_template.render_async(unassigned = unassigned,
-                                             user_data = user_data, urgent_issues = urgent_issues, random_user = random_user, updated = updated)
-    return html(tmpl)
+    tmpl = await users_template.render_async(unassigned=unassigned,
+                                             user_data=user_data, urgent_issues=urgent_issues, random_user=random_user, updated=updated)
+    return HTMLResponse(tmpl)
 
 
-@app.route('/users/<user>')
-async def html_get_user(request, user):
-    user_data, updated=get_user(user)
+@app.route('/users/{user:str}')
+async def html_get_user(request):
+    user = request.path_params.get('user')
 
-    tmpl=await one_user_templ.render_async(user = user, user_data = user_data, updated = updated)
-    return html(tmpl)
+    user_data, updated = get_user(user)
+
+    tmpl = await one_user_templ.render_async(user=user, user_data=user_data, updated=updated)
+    return HTMLResponse(tmpl)
 
 
 @app.route('/json')
 async def json_all_users(request):
-    return text(users_json)
+    return Response(users_json, media_type='application/json')
 
 
-@app.route('/json/users/<user>')
-async def json_user(request, user):
-    user_data, updated=get_user(user)
-    return json({"updated": updated, "user_data": user_data})
+@app.route('/json/users/{user:str}')
+async def json_user(request):
+    user = request.path_params.get('user')
+
+    user_data, updated = get_user(user)
+    return UJSONResponse({"updated": updated, "user_data": user_data})
 
 
 @app.route('/json/random')
 async def json_random_user(request):
-    return text(random.choice(users))
+    return PlainTextResponse(random.choice(users))
 
 
 def get_and_cache_users(github_data):
-    unassigned=[]
-    user_data=collections.defaultdict(
+    unassigned = []
+    user_data = collections.defaultdict(
         lambda: {'CHANGES_REQUESTED': [],
                  'NEEDS_REVIEW': [],
                  'ISSUES': []})
@@ -147,12 +150,11 @@ def get_and_cache_users(github_data):
         for user in issue['assignees']:
             d = user_data[user]
             if issue['urgent']:
-                time = datetime.datetime.now() - issue['created_at']
                 urgent_issues.append({
                     'USER': user,
                     'ISSUE': issue,
-                    'timedelta': time,
-                    'AGE': humanize.naturaltime(time)})
+                    'TIMESTAMP': issue['timestamp'],
+                    'AGE': humanize.naturaltime(time.time() - issue['timestamp'])})
             else:
                 d['ISSUES'].append(issue)
 
@@ -168,7 +170,7 @@ def get_and_cache_users(github_data):
             add_issue(repo_name, issue)
 
     list.sort(urgent_issues,
-              key = lambda issue: issue['timedelta'], reverse=True)
+              key=lambda issue: issue['TIMESTAMP'], reverse=True)
 
     return (user_data, unassigned, urgent_issues)
 
@@ -177,19 +179,17 @@ def get_user(user):
     global data
 
     cur_data = data
-    cur_timestamp = timestamp
+    # Do this first in case timestamp changes
+    updated = get_update_time()
 
-    updated = humanize.naturaltime(
-        datetime.datetime.now() - datetime.timedelta(seconds=time.time() - cur_timestamp))
-
-    user_data={
+    user_data = {
         'CHANGES_REQUESTED': [],
         'NEEDS_REVIEW': [],
         'FAILING': [],
         'ISSUES': []
     }
 
-    for repo_name, repo_data in cur_data.items():
+    for _, repo_data in cur_data.items():
         for pr in repo_data['prs']:
             state = pr['state']
             if state == 'CHANGES_REQUESTED':
@@ -209,6 +209,11 @@ def get_user(user):
                 user_data['ISSUES'].append(issue)
 
     return (user_data, updated)
+
+
+def get_update_time():
+    return humanize.naturaltime(
+        datetime.datetime.now() - datetime.timedelta(seconds=time.time() - timestamp))
 
 
 def get_id(repo_name, number):
@@ -260,7 +265,7 @@ def get_issue_data(repo_name, issue):
         'assignees': assignees,
         'html_url': issue.html_url,
         'urgent': any(label.name == 'prio:high' for label in issue.labels),
-        'created_at': issue.created_at
+        'timestamp': issue.created_at.timestamp()
     }
 
 
@@ -295,6 +300,7 @@ def update_data():
     data = new_data
     timestamp = time.time()
     users_data = get_and_cache_users(new_data)
+
     users_json = ujson.dumps(
         {"user_data": users_data[0], "unassigned": users_data[1], "urgent_issues": users_data[2], "timestamp": timestamp})
 
@@ -338,4 +344,4 @@ if __name__ == '__main__':
 
     poll_thread.start()
 
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    uvicorn.run(app, host='0.0.0.0', port=5000, log_level='critical')
