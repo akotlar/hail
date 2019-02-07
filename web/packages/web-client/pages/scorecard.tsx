@@ -2,7 +2,7 @@ import { PureComponent } from 'react';
 import fetch from 'isomorphic-unfetch';
 import getConfig from 'next/config';
 import Link from 'next/link';
-import { PR, Issue } from './scorecard/scorecard';
+import { PR, Issue } from '../@types/scorecard';
 
 import '../styles/pages/scorecard.scss';
 
@@ -46,7 +46,7 @@ declare type scorecardJson = {
 declare type user = string;
 
 interface State {
-  data: scorecardJson;
+  data?: scorecardJson;
   user: user;
 }
 
@@ -63,22 +63,35 @@ interface Props {
 // time between page clicks, non-stale state will be served in << 16ms on click
 let cache: scorecardJson;
 
+let cachePromise: Promise<any>;
+
+let fetchData = () => {
+  cachePromise = fetch(`${WEB_URL}/json`)
+    .then(d => d.json())
+    .then(data => {
+      cache = data;
+    });
+
+  return cachePromise;
+};
+
 let timeout: NodeJS.Timeout;
 const startPolling = (ms: number = 1 * 60 * 1000) => {
   if (timeout) {
     clearTimeout(timeout);
   }
 
-  timeout = setInterval(() => {
-    fetch(`${WEB_URL}/json`)
-      .then(d => d.json())
-      .then(data => {
-        cache = data;
-      });
-  }, ms);
+  timeout = setInterval(fetchData, ms);
 };
 
+let user: string;
+let initialized = false;
+
 class Scorecard extends PureComponent<Props, State> {
+  state = {
+    user: user,
+    data: cache
+  };
   // Data that is fetched during the server rendering phase does not need
   // to be re-fetched during the client rendering phase
   // The data is automatically available under this.props.pageProps
@@ -88,40 +101,40 @@ class Scorecard extends PureComponent<Props, State> {
   }
 
   static async getInitialProps() {
-    const user = Scorecard.refreshUser();
+    user = Scorecard.refreshUser();
 
     // TODO: have a single utility function, that checks this once at startup
     // in each phase
     const onServer = typeof window === 'undefined';
 
-    if (onServer || !cache) {
-      const ssr: scorecardJson = await fetch(
-        `${onServer ? SERVER_URL : WEB_URL}/json`
-      ).then(d => d.json());
+    if (onServer) {
+      fetchData();
 
-      // TODO: could use page loading indicator here instead of synchronously waiting
-      if (!onServer) {
-        cache = ssr;
-        startPolling();
-      }
-
-      return { pageProps: { data: ssr, user } };
+      return;
     }
 
-    return { pageProps: { user } };
+    startPolling();
+
+    return null;
   }
 
   constructor(props: Props) {
     super(props);
 
+    if (cache) {
+      this.state.data = cache;
+    }
+
+    this.state.user = user;
+
     // Initialize state to props becaues we may mutate the state (say polling)
     // but props are supposed to be read-only
-    this.state = {
-      data: this.props.pageProps.data || cache,
-      user: this.props.pageProps.user
-    };
   }
 
+  onComponenDidMountt() {
+    if (initialized) {
+    }
+  }
   handleRefreshUser = () => {
     this.setState({ user: Scorecard.refreshUser() });
   };

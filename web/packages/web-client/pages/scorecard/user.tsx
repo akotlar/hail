@@ -1,5 +1,5 @@
 import { PureComponent, Fragment } from 'react';
-import { PR, Issue } from './scorecard';
+import { PR, Issue } from '../../@types/scorecard';
 import fetch from 'isomorphic-unfetch';
 import getConfig from 'next/config';
 
