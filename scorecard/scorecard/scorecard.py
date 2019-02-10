@@ -8,11 +8,13 @@ import random
 import threading
 import humanize
 import logging
-from sanic import Sanic
-from sanic.response import text, json, html
-from sanic_cors import CORS
-from jinja2 import Environment, PackageLoader, select_autoescape
+
+import asyncio
 import ujson
+import uvloop
+from aiohttp import web
+
+from jinja2 import Environment, PackageLoader, select_autoescape
 
 env = Environment(loader=PackageLoader('scorecard', 'templates/'),
                   autoescape=select_autoescape(['html', 'xml', 'tpl']), enable_async=True)
@@ -64,8 +66,9 @@ repos = {
     'cloudtools': 'Nealelab/cloudtools'
 }
 
-app = Sanic(__name__)
-CORS(app, resources={r'/json/*': {'origins': '*'}})
+routes = web.RouteTableDef()
+
+# CORS(app, resources={r'/json/*': {'origins': '*'}})
 
 fav_path = os.path.join(os.path.dirname(__file__), 'static', 'favicon.ico')
 app.static('/favicon.ico', fav_path)
@@ -80,7 +83,7 @@ timsetamp=None
 ################################################################################
 
 
-@app.route('/')
+@routes('/')
 async def index(request):
     user_data, unassigned, urgent_issues=users_data
 
@@ -97,7 +100,7 @@ async def index(request):
     return html(tmpl)
 
 
-@app.route('/users/<user>')
+@routes('/users/<user>')
 async def html_get_user(request, user):
     user_data, updated=get_user(user)
 
@@ -105,18 +108,18 @@ async def html_get_user(request, user):
     return html(tmpl)
 
 
-@app.route('/json')
+@routes('/json')
 async def json_all_users(request):
     return text(users_json)
 
 
-@app.route('/json/users/<user>')
+@routes('/json/users/<user>')
 async def json_user(request, user):
     user_data, updated=get_user(user)
     return json({"updated": updated, "user_data": user_data})
 
 
-@app.route('/json/random')
+@routes('/json/random')
 async def json_random_user(request):
     return text(random.choice(users))
 
@@ -338,4 +341,9 @@ if __name__ == '__main__':
 
     poll_thread.start()
 
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    app = web.Application()
+
+    web.run_app(app, port=8000, access_log=None)
+

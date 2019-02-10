@@ -1,11 +1,11 @@
 name: scorecard
 dependencies:
-- python=3.7
-- humanize
-- pip
-- jinja2
-- pip:
-    - PyGithub
-    - sanic
-    - sanic-cors
-    - ujson
+  - python=3.7
+  - humanize
+  - pip
+  - jinja2
+  - pip:
+      - PyGithub
+      - aiohttp
+      - aiohttp_cors
+      - ujson
