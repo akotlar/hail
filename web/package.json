@@ -1,7 +1,7 @@
 {
   "name": "hail-web",
-  "version": "0.2.0",
-  "description": "Hail Web (Isomorphic JS + Data Endpoints)",
+  "version": "0.2.9",
+  "description": "Hail Web (Isomorphic JS + API Endpoints)",
   "main": "index.js",
   "repository": {
     "type": "git",
