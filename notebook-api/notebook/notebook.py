@@ -96,26 +96,7 @@ def UNSAFE_user_id_transform(user_id): return user_id.replace('|', '--_--')
 
 def start_pod(jupyter_token, image, labels={}):
     pod_id = uuid.uuid4().hex
-    service_spec = kube.client.V1ServiceSpec(
-        selector={
-            'app': 'notebook-worker',
-            'hail.is/notebook-instance': INSTANCE_ID,
-            'uuid': pod_id},
-        ports=[kube.client.V1ServicePort(port=80, target_port=8888)])
-    service_template = kube.client.V1Service(
-        metadata=kube.client.V1ObjectMeta(
-            generate_name='notebook-worker-service-',
-            labels={
-                'app': 'notebook-worker',
-                'hail.is/notebook-instance': INSTANCE_ID,
-                'uuid': pod_id,
-                **labels}),
-        spec=service_spec)
-    svc = k8s.create_namespaced_service(
-        'default',
-        service_template,
-        _request_timeout=KUBERNETES_TIMEOUT_IN_SECONDS
-    )
+
     pod_spec = kube.client.V1PodSpec(
         containers=[
             kube.client.V1Container(
@@ -124,7 +105,7 @@ def start_pod(jupyter_token, image, labels={}):
                     'notebook',
                     "--ip", "0.0.0.0", "--no-browser",
                     f'--NotebookApp.token={jupyter_token}',
-                    f'--NotebookApp.base_url=/instance/{svc.metadata.name}/'
+                    f'--NotebookApp.base_url=/instance/{pod_id}/'
                 ],
                 name='default',
                 image=image,
@@ -133,7 +114,7 @@ def start_pod(jupyter_token, image, labels={}):
                      requests={'cpu': '1.601', 'memory': '1.601G'}),
                 readiness_probe=kube.client.V1Probe(
                     http_get=kube.client.V1HTTPGetAction(
-                        path=f'/instance/{svc.metadata.name}/login',
+                        path=f'/instance/{pod_id}/login',
                         port=8888)))])
     pod_template = kube.client.V1Pod(
         metadata=kube.client.V1ObjectMeta(
@@ -142,7 +123,6 @@ def start_pod(jupyter_token, image, labels={}):
                 'app': 'notebook-worker',
                 'hail.is/notebook-instance': INSTANCE_ID,
                 'uuid': pod_id,
-                'svc_name': svc.metadata.name,
                 **labels
             },),
         spec=pod_spec)
@@ -152,7 +132,7 @@ def start_pod(jupyter_token, image, labels={}):
         _request_timeout=KUBERNETES_TIMEOUT_IN_SECONDS,
     )
 
-    return svc, pod
+    return pod
 
 
 def del_pod(pod_name):
@@ -277,7 +257,7 @@ def read_conditions(conds):
     return {"message": maxCond.message, "reason": maxCond.reason, "status": maxCond.status, "type": maxCond.type}
 
 
-common_pod_paths = [
+pod_paths = [
     ['name', 'metadata.labels.name'],
     ['pod_name', 'metadata.name'],
     ['svc_name', 'metadata.labels.svc_name'],
@@ -290,17 +270,17 @@ common_pod_paths = [
     ['condition', 'status.conditions', lambda x: read_conditions(x)]
 ]
 
-pod_paths = [
-    *common_pod_paths,
-    ['svc_status', 'metadata.labels.svc_name', lambda x: read_svc_status(x)],
-]
+# pod_paths = [
+#     *common_pod_paths,
+#     ['svc_status', 'metadata.labels.svc_name', lambda x: read_svc_status(x)],
+# ]
 
-# TODO: This may not work in all cases; we may need to pass the svc object
-# and check it; it doesn't seem to have useful status information
-pod_paths_post = [
-    *common_pod_paths,
-    ['svc_status', 'metadata.labels.svc_name', lambda _: 'Running'],
-]
+# # TODO: This may not work in all cases; we may need to pass the svc object
+# # and check it; it doesn't seem to have useful status information
+# pod_paths_post = [
+#     *common_pod_paths,
+#     ['svc_status', 'metadata.labels.svc_name', lambda _: 'Running'],
+# ]
 
 ########################## WS and HTTP Routes ##################################
 
@@ -355,8 +335,8 @@ def echo_socket(ws):
     ws.close()
 
 
-@app.route('/api/verify/<svc_name>/', methods=['GET'])
-def verify(svc_name):
+@app.route('/api/verify/<pod_name>/', methods=['GET'])
+def verify(pod_name):
     access_token = request.cookies.get('access_token')
     # No longer verify the juptyer token; let jupyter handle this
     # The URI gets modified by jupyter, so get queries get lost
@@ -379,7 +359,8 @@ def verify(svc_name):
     if not user_id:
         return '', 401
 
-    k_res = k8s.read_namespaced_service(svc_name, 'default')
+    k_res = k8s.read_namespaced_pod(pod_name, 'default')
+    print('stuff', k_res)
 
     l = k_res.metadata.labels
 
@@ -387,7 +368,7 @@ def verify(svc_name):
         return '', 401
 
     resp = Response('')
-    resp.headers['IP'] = k_res.spec.cluster_ip
+    # resp.headers['IP'] = k_res.spec.cluster_ip
 
     return resp
 
@@ -408,38 +389,22 @@ def get_notebooks():
 # TODO: decide if need to communicate issues to user; probably just alert devs
 
 
-@app.route('/api/<svc_name>', methods=['DELETE'])
-def delete_notebook(svc_name):
+@app.route('/api/<pod_name>', methods=['DELETE'])
+def delete_notebook(pod_name):
     # TODO: Is it possible to have a falsy token value and get here?
-    if not request.headers.get("User") or not svc_name:
+    if not request.headers.get("User") or not pod_name:
         return forbidden()
 
     escp_user_id = UNSAFE_user_id_transform(request.headers.get("User"))
 
     try:
-        svc = k8s.read_namespaced_service(svc_name, 'default')
+        pod = k8s.read_namespaced_pod(
+            pod_name, 'default', _request_timeout=30).items
 
-        if svc.metadata.labels['user_id'] != escp_user_id:
+        if pod.metadata.labels['user_id'] != escp_user_id:
             return forbidden()
 
-        del_svc(svc_name)
-
-        pods = k8s.list_namespaced_pod(
-            namespace='default', label_selector=f"uuid={svc.metadata.labels['uuid']}", timeout_seconds=30).items
-
-        if len(pods) == 0:
-            log.error(
-                f"svc_name: {svc_name} pod_uuid: {svc.metadata.labels['uuid']}: pod not found for given uuid")
-            return '', 200
-
-        if len(pods) > 1:
-            log.error(
-                f"svc_name: {svc_name} pod_uuid: {svc.metadata.labels['uuid']}: pod_uuid is not unique")
-
-        for pod in pods:
-            if pod.metadata.labels['user_id'] != escp_user_id:
-                return forbidden()
-            del_pod(pod.metadata.name)
+        del_pod(pod.metadata.name)
 
         return '', 200
 
@@ -464,7 +429,7 @@ def new_notebook():
     # Token doesn't need to be crypto secure, just unique (since we authorize user)
     # However, encryption or even detection of modification via hash may further reduce attack space
     jupyter_token = uuid.uuid4().hex
-    _, pod = start_pod(
+    pod = start_pod(
         jupyter_token, WORKER_IMAGES[image],
         labels={'name': name,
                 'jupyter_token': jupyter_token,
@@ -472,7 +437,7 @@ def new_notebook():
     )
 
     # We could also construct pod_paths_post here, and close over svc
-    return marshall_json([pod], pod_paths_post, True), 200
+    return marshall_json([pod], pod_paths, True), 200
 
 
 if __name__ == '__main__':
