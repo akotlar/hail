@@ -6,7 +6,8 @@ AUTH0_CLIENT_ID=TD78k23CcdM4pMWoYZwYwKJbQPBj06jY
 # If using popup auth0 mode, use this: AUTH0_CALLBACK_SUFFIX=static/auth0-redirect.html
 AUTH0_CALLBACK_SUFFIX=auth0-redirect
 
-SCORECARD_DOMAIN=https://scorecard.hail.is
-SCORECARD_USERS=catoverdrive,cseed,akotlar,danking,tpoterba,daniel-goldstein,chrisvittal,patrick-schultz,jigold,jbloom22
+SCORECARD_WEB_URL=https://scorecard.hail.is
+SCORECARD_SERVER_URL=http://scorecard
+SCORECARD_USERS=akotlar,catoverdrive,chrisvittal,cseed,daniel-goldstein,danking,jbloom22, jigold,patrick-schultz,tpoterba
 
-NOTEBOOK_DOMAIN=http://localhost:8000/notebook
+NOTEBOOK_URL=https://notebook.hail.is/jupyter

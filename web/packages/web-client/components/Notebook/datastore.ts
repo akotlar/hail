@@ -60,8 +60,7 @@ export enum kubeState {
 // TODO: If user isn't logged in, and make it to this page
 // TODO: Enumerate waitingStatus 'reason's
 // after 401, tell them they need to log in
-const cfg = getConfig().publicRuntimeConfig.NOTEBOOK;
-export const URL: string = cfg.URL;
+export const URL: string = getConfig().publicRuntimeConfig.NOTEBOOK.URL;
 
 const getAlive = (nbs: notebooksType) =>
   Object.values(nbs).filter(
@@ -96,7 +95,7 @@ export const startRequest = () => {
     return resultsPromise;
   }
 
-  resultsPromise = fetch(`${URL}/api`, {
+  resultsPromise = fetch(`${URL}/jupyter`, {
     headers: {
       Authorization: `Bearer ${auth.accessToken}`
     }
@@ -132,7 +131,7 @@ export const startListener = () => {
   }
 
   const name = URL.replace(/http/, 'ws'); //automatically wss if https
-  const ws = new WebSocket(`${name}/api/ws`);
+  const ws = new WebSocket(`${name}/jupyter/ws`);
 
   isListening = true;
 
@@ -179,7 +178,7 @@ export const startListener = () => {
 };
 
 export const createNotebook = async () => {
-  return fetch(`${URL}/api`, {
+  return fetch(`${URL}/jupyter`, {
     headers: {
       Authorization: `Bearer ${auth.accessToken}`
     },
@@ -200,7 +199,7 @@ export const removeItemFromNotebook = (notebook: notebookType) => {
 };
 
 export const deleteNotebook = (notebook: notebookType, skipRemove: boolean) => {
-  return fetch(`${URL}/api/${notebook.svc_name}`, {
+  return fetch(`${URL}/jupyter/${notebook.svc_name}`, {
     headers: {
       Authorization: `Bearer ${auth.accessToken}`
     },
