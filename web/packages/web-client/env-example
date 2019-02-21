@@ -10,6 +10,6 @@ SCORECARD_WEB_URL=https://scorecard.hail.is
 SCORECARD_SERVER_URL=http://scorecard
 SCORECARD_USERS=akotlar,catoverdrive,chrisvittal,cseed,daniel-goldstein,danking,jbloom22, jigold,patrick-schultz,tpoterba
 
-NOTEBOOK_URL=https://notebook.hail.is
+NOTEBOOK_URL=https://notebook2.hail.is
 
 HAIL_DOMAIN=hail.is
