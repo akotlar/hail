@@ -1,16 +1,16 @@
-FROM alpine:3.8
+FROM alpine:3.9
 MAINTAINER Hail Team <hail@broadinstitute.org>
 
 RUN apk add \
   bash \
-  gcc \
+  # needed to compile lib sass
+  build-base \
   libffi-dev \
   musl-dev \
   openssl-dev \
   python3 \
   python3-dev && \
-  # <19 due to https://github.com/pypa/pip/issues/6197
-  pip3 install -U 'pip<19' && \
+  pip3 install -U pip && \
   pip3 install --no-cache-dir \
   flask \
   Flask_Sockets \
