@@ -76,7 +76,6 @@
             // Async issues may prevent cached element from updating unless we look up here
             document.getElementById(`${podUUID}-visual-summary`).innerHTML = '<i class="material-icons reachable-icon">done</i>';
         }, () => {
-            console.info(`${podUUID} is not reachable`);
             document.getElementById(`${podUUID}-visual-summary`).innerHTML = '<i class="material-icons unreachable-icon">block</i>';
         });
     }
