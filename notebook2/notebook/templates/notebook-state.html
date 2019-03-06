@@ -18,9 +18,6 @@
             class="nb-state-container"
             id="{{notebook.pod_uuid}}"
             href={{notebook['url']}}
-            {% if ready %}
-            data-ready
-            {% endif %}
         >
             <b>{{notebook.pod_name}}</b>
             <span class="small">Created:<b id="{{notebook.pod_uuid}}-creation-date">{{notebook.creation_date}}</b></span>
