@@ -80,6 +80,7 @@
     }
 
     const checked = {};
+    const maxChecks = 30;
     function checkReachability(podUUID) {
         const url = `/instance-ready/${podUUID}/`
         const el = document.getElementById(`${podUUID}-reach`);
@@ -97,13 +98,23 @@
                 fetch(url, {
                     method: 'HEAD'
                 }).then((r) => {
+                    checked[podUUID]++
+
                     if(r.status == 405 || r.status == 302) {
                         el.innerText = `Yes!`;
 
                         clearInterval(interval);
                         resolve(true);
                     } else if(r.status == 502) {
-                        location.reload();
+                        if(checked[podUUID] == 1) {
+                            el.innerText = `Can't reach (1 attempt)`;
+                        } else if (checked[podUUID] < maxChecks) {
+                            el.innerText = `Can't reach (${checked[podUUID]} attempts)`;
+                        } else {
+                            el.innerText = `Can't reach, sorry!`;
+                            clearInterval(interval);
+                            reject(true);
+                        }
                     } else {
                         el.innerText = `No (${r.status})`;
 
@@ -111,7 +122,7 @@
                         reject("Job endpoint not found on server");
                     }
                 });
-            }, 500);
+            }, 1000);
         })
 
         return promise;
