@@ -2,3 +2,5 @@
 /notebook-image
 /notebook-worker-images
 /notebook/static/css
+/instance.cloudsql
+/cloud_sql_proxy

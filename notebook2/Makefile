@@ -1,4 +1,4 @@
-.PHONY: build push run-docker run deploy clean clean-workers push-latest-tag hailjwt
+.PHONY: build push run-docker run deploy clean clean-workers push-latest-tag hailjwt install-cloud-sql-proxy local-cloud-sql-config run-cloud-sql-proxy
 
 PROJECT = $(shell gcloud config get-value project)
 IMAGE_SHORT_NAMES = $(shell ls -1 images)
@@ -8,6 +8,16 @@ PUSHED_LATEST_TAG = $(foreach image,$(IMAGE_SHORT_NAMES),build/images/$(image)/_
 APISERVER_JUPYTER_IMAGE = $(shell kubectl -n default get deployments apiserver -o json -o "jsonpath={.metadata.annotations.hail-jupyter-image}")
 
 .PHONY: $(IMAGE_SHORT_NAMES)
+
+include ../cloud-sql.mk
+
+INSTANCE = $(shell kubectl get secret create-users -o json | jq -r ".data.instance" | base64 -D)
+
+instance.cloudsql:
+	echo "$(INSTANCE)" > $@
+
+run-local: install-cloud-sql-proxy instance.cloudsql
+	./run-locally.sh
 
 build/images/%/_BUILT: images/%/Dockerfile $(shell find images/$*)
 	mkdir -p $(dir $@)
