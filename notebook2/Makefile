@@ -1,51 +1,15 @@
 .PHONY: build push run-docker run deploy clean clean-workers push-latest-tag hailjwt
 
-PROJECT = $(shell gcloud config get-value project)
-IMAGE_SHORT_NAMES = $(shell ls -1 images)
-BUILT = $(foreach image,$(IMAGE_SHORT_NAMES),build/images/$(image)/_BUILT)
-PUSHED = $(foreach image,$(IMAGE_SHORT_NAMES),build/images/$(image)/_PUSHED)
-PUSHED_LATEST_TAG = $(foreach image,$(IMAGE_SHORT_NAMES),build/images/$(image)/_PUSHED_LATEST_TAG)
-APISERVER_JUPYTER_IMAGE = $(shell kubectl -n default get deployments apiserver -o json -o "jsonpath={.metadata.annotations.hail-jupyter-image}")
-
-.PHONY: $(IMAGE_SHORT_NAMES)
-
-build/images/%/_BUILT: images/%/Dockerfile $(shell find images/$*)
-	mkdir -p $(dir $@)
-ifeq ($(CI_BUILD),true)
-	-docker pull gcr.io/${PROJECT}/$*:latest
-	cd images/$* && docker build . -t $* --cache-from=gcr.io/${PROJECT}/$*:latest
-else
-	cd images/$* && docker build . -t $*
-endif
-	touch $@
-
-build/images/%/_PUSHED: IMAGE = gcr.io/$(PROJECT)/$*:$(shell docker images -q --no-trunc $* | sed -e 's,[^:]*:,,')
-build/images/%/_PUSHED: build/images/%/_BUILT
-	docker tag $* $(IMAGE)
-	docker push $(IMAGE)
-	echo $(IMAGE) > $@
-
-build/images/%/_PUSHED_LATEST_TAG: IMAGE = gcr.io/$(PROJECT)/$*:latest
-build/images/%/_PUSHED_LATEST_TAG: build/images/%/_BUILT
-	docker tag $* $(IMAGE)
-	docker push $(IMAGE)
-	echo $(IMAGE) > $@
-
-$(IMAGE_SHORT_NAMES): %: build/images/%/_BUILT
-
-notebook-worker-images: $(PUSHED)
-	cat $^ > $@ && test $(APISERVER_JUPYTER_IMAGE) && echo $(APISERVER_JUPYTER_IMAGE) >> $@
+NOTEBOOK2_LATEST = gcr.io/$(PROJECT)/notebook2:latest
 
 hailjwt:
 	cp -rf ../hailjwt ./
 
-build: $(BUILT) notebook-worker-images hailjwt
-ifeq ($(CI_BUILD),true)
-	-docker pull gcr.io/${PROJECT}/notebook2:latest
-	docker build . -t notebook2 --cache-from=gcr.io/${PROJECT}/notebook2:latest
-else
-	docker build . -t notebook2
-endif
+build: hailjwt
+	make -C ../docker build
+	-docker pull $(BATCH_LATEST)
+	python3 ../ci2/jinja2_render.py '{"base_image":{"image":"base"}}' Dockerfile Dockerfile.out
+	docker build -t notebook2 -f Dockerfile.out --cache-from notebook2,$(NOTEBOOK2_LATEST),base ..
 
 push: IMAGE = gcr.io/$(PROJECT)/notebook2:$(shell docker images -q --no-trunc notebook2 | sed -e 's,[^:]*:,,')
 push: build $(PUSHED)

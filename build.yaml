@@ -292,6 +292,7 @@ steps:
    dependsOn:
     - hail_base_image
     - build_hail
+    - create_accounts
  - kind: buildImage
    name: notebook2_image
    dockerFile: notebook2/Dockerfile
@@ -605,6 +606,7 @@ steps:
    dependsOn:
     - default_ns
     - batch_pods_ns
+    - create_accounts
     - deploy_batch
     - test_pipeline_image
     - setup_pipeline

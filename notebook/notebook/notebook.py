@@ -48,7 +48,7 @@ def read_string(f):
         return f.read().strip()
 
 KUBERNETES_TIMEOUT_IN_SECONDS = float(os.environ.get('KUBERNETES_TIMEOUT_IN_SECONDS', 5.0))
-app.secret_key = read_string('/notebook-secrets/secret-key')
+app.secret_key = read_string('/jwt-secret-key/secret-key')
 PASSWORD = read_string('/notebook-secrets/password')
 ADMIN_PASSWORD = read_string('/notebook-secrets/admin-password')
 INSTANCE_ID = uuid.uuid4().hex
