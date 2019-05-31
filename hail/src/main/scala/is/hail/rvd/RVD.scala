@@ -8,7 +8,7 @@ import is.hail.expr.ir.PruneDeadFields.isSupertype
 import is.hail.expr.types._
 import is.hail.expr.types.physical.{PInt64, PStruct}
 import is.hail.expr.types.virtual.{TArray, TInterval, TStruct}
-import is.hail.io.fs.{HadoopFS, SerializableHadoopConfiguration}
+import is.hail.io.fs.HadoopFS
 import is.hail.io.{CodecSpec, RichContextRDDRegionValue}
 import is.hail.sparkextras._
 import is.hail.utils._

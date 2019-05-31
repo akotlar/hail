@@ -4,7 +4,7 @@ import java.io.{File, InputStream}
 import java.util.Properties
 
 import is.hail.annotations._
-import is.hail.io.fs.{FS, HadoopFS, SerializableHadoopConfiguration}
+import is.hail.io.fs.{FS, HadoopFS}
 import is.hail.expr.ir.functions.IRFunctionRegistry
 import is.hail.expr.ir.{BaseIR, IRParser, MatrixIR, TextTableReader}
 import is.hail.expr.types.physical.PStruct
@@ -26,6 +26,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.json4s.Extraction
 import org.json4s.jackson.JsonMethods
+import org.apache.hadoop
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -54,6 +55,10 @@ object HailContext {
   }
 
   def sc: SparkContext = get.sc
+
+  def sHadoopConf: SerializableHadoopConfiguration = get.sHadoopConf
+
+  def hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = get.hadoopConfBc
 
   def sFS: FS = get.sFS
 
@@ -362,6 +367,7 @@ object HailContext {
   private[this] val hailGzipAsBGZipCodec = "is.hail.io.compress.BGzipCodecGZ"
 
   def maybeGZipAsBGZip[T](force: Boolean)(body: => T): T = {
+    println("CALLED maybeGzip")
     val fs = HailContext.get.sFS
     if (!force)
       body
@@ -386,7 +392,10 @@ class HailContext private(val sc: SparkContext,
   val tmpDir: String,
   val branchingFactor: Int,
   val optimizerIterations: Int) {
-  val sFS: FS = new HadoopFS(new SerializableHadoopConfiguration(sc.hadoopConfiguration))
+  val hadoopConf: hadoop.conf.Configuration = sc.hadoopConfiguration
+  val sHadoopConf: SerializableHadoopConfiguration = new SerializableHadoopConfiguration(hadoopConf)
+  val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
+  val sFS: FS = new HadoopFS(sHadoopConf)
   val bcFS: Broadcast[FS] = sc.broadcast(sFS)
   val sparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()
 
@@ -426,8 +435,11 @@ class HailContext private(val sc: SparkContext,
       }
   }
 
-  def getTemporaryFile(nChar: Int = 10, prefix: Option[String] = None, suffix: Option[String] = None): String =
-    sFS.getTemporaryFile(tmpDir, nChar, prefix, suffix)
+  def getTemporaryFile(nChar: Int = 10, prefix: Option[String] = None, suffix: Option[String] = None): String = {
+    val fs = new HadoopFS(new SerializableHadoopConfiguration(sc.hadoopConfiguration))
+    fs.getTemporaryFile(tmpDir, nChar, prefix, suffix)
+  }
+    
 
   def indexBgen(files: java.util.List[String],
     indexFileMap: java.util.Map[String, String],
@@ -501,6 +513,8 @@ class HailContext private(val sc: SparkContext,
     val nPartitions = partFiles.length
 
     val localBcFS = bcFS
+
+    println("CALLED readPartition")
 
     new RDD[T](sc, Nil) {
       def getPartitions: Array[Partition] =

@@ -1671,38 +1671,95 @@ class VCFsReader(
   }
 
   private val fileInfo: Array[Array[String]] = externalSampleIds.getOrElse {
-    val localBcFs = bcFs
-    val localFile1 = file1
-    val localEntryFloatType = entryFloatType
-    val localCallFields = callFields
-    val localArrayElementsRequired = arrayElementsRequired
-    val localFilterAndReplace = filterAndReplace
-    val localGenotypeSignature = header1.genotypeSignature
-    val localVASignature = header1.vaSignature
+    // val localBcFs = bcFs
+    val shConf = new SerializableHadoopConfiguration(sc.hadoopConfiguration)
+    println("SHCONF")
+    println(shConf.value.get("io.compression.codecs"))
+    println("\\")
 
-    sc.parallelize(files, files.length).map { file =>
-      val fs = localBcFs.value
-      val headerLines = getHeaderLines(fs, file, localFilterAndReplace)
-      val header = parseHeader(
-        localCallFields, localEntryFloatType, headerLines, arrayElementsRequired = localArrayElementsRequired)
+    // Serialization  
+      // try
+      // {    
+      //     //Saving of object in a file 
+      //     FileOutputStream file = new FileOutputStream(); 
+      //     ObjectOutputStream out = new ObjectOutputStream(file); 
+            
+      //     // Method for serialization of object 
+      //     out.writeObject(object); 
+            
+      //     out.close(); 
+      //     file.close(); 
+            
+      //     System.out.println("Object has been serialized"); 
 
-      if (header.genotypeSignature != localGenotypeSignature)
-        fatal(
-          s"""invalid genotype signature: expected signatures to be identical for all inputs.
-             |   $localFile1: $localGenotypeSignature
-             |   $file: ${header.genotypeSignature}""".stripMargin)
+      // } 
+        
+      // catch(IOException ex) 
+      // { 
+      //     System.out.println("IOException is caught"); 
+      // } 
 
-      if (header.vaSignature != localVASignature)
-        fatal(
-          s"""invalid variant annotation signature: expected signatures to be identical for all inputs.
-             |   $localFile1: $localVASignature
-             |   $file: ${header.vaSignature}""".stripMargin)
+    
 
-
-      header.sampleIds
-    }
-      .collect()
+    val localBcFsConf = sc.broadcast(shConf)
+    // val localFile1 = file1
+    // val localEntryFloatType = entryFloatType
+    // val localCallFields = callFields
+    // val localArrayElementsRequired = arrayElementsRequired
+    // val localFilterAndReplace = filterAndReplace
+    // val localGenotypeSignature = header1.genotypeSignature
+    // val localVASignature = header1.vaSignature
+    // println("RUNNING fileInfo in class VCFsReader")
+    // println(localBcFsConf)
+    // println(localBcFsConf.value.value.get("io.compression.codecs"))
+    // println("\\")
+    println("Before serialize")
+    var results: Array[Array[String]] = Array()
+    var stuff = sc.parallelize(files, files.length).map { file =>
+      localBcFsConf.value
+    }.collect()
+    println("AFTER")
+    
+    println(stuff(0).value.get("io.compression.codecs"))
+    println("\\\\\\\\")
+    // println(stuff(1))
+    
+    results
   }
+
+  // private val fileInfo: Array[Array[String]] = externalSampleIds.getOrElse {
+  //   val localBcFs = bcFs
+  //   val localFile1 = file1
+  //   val localEntryFloatType = entryFloatType
+  //   val localCallFields = callFields
+  //   val localArrayElementsRequired = arrayElementsRequired
+  //   val localFilterAndReplace = filterAndReplace
+  //   val localGenotypeSignature = header1.genotypeSignature
+  //   val localVASignature = header1.vaSignature
+
+  //   sc.parallelize(files, files.length).map { file =>
+  //     val fs = localBcFs.value
+  //     val headerLines = getHeaderLines(fs, file, localFilterAndReplace)
+  //     val header = parseHeader(
+  //       localCallFields, localEntryFloatType, headerLines, arrayElementsRequired = localArrayElementsRequired)
+
+  //     if (header.genotypeSignature != localGenotypeSignature)
+  //       fatal(
+  //         s"""invalid genotype signature: expected signatures to be identical for all inputs.
+  //            |   $localFile1: $localGenotypeSignature
+  //            |   $file: ${header.genotypeSignature}""".stripMargin)
+
+  //     if (header.vaSignature != localVASignature)
+  //       fatal(
+  //         s"""invalid variant annotation signature: expected signatures to be identical for all inputs.
+  //            |   $localFile1: $localVASignature
+  //            |   $file: ${header.vaSignature}""".stripMargin)
+
+
+  //     header.sampleIds
+  //   }
+  //     .collect()
+  // }
 
 
   def readFile(file: String, i: Int): MatrixIR = {

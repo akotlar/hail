@@ -1,6 +1,6 @@
 package is.hail.io.fs
 
-import is.hail.utils.{fatal, formatTime, getPartNumber, info, time, using, warn}
+import is.hail.utils.{fatal, formatTime, getPartNumber, info, time, using, warn, SerializableHadoopConfiguration}
 import java.io._
 import java.util.Map
 import scala.collection.JavaConverters._
@@ -78,25 +78,13 @@ class HadoopFileStatus(fs: hadoop.fs.FileStatus) extends FileStatus {
   def getOwner: String = fs.getOwner
 }
 
-class SerializableHadoopConfiguration(@transient var conf: hadoop.conf.Configuration) extends Serializable {
-  private def writeObject(out: ObjectOutputStream) {
-    out.defaultWriteObject()
-    conf.write(out)
-  }
-
-  private def readObject(in: ObjectInputStream) {
-    conf = new hadoop.conf.Configuration(false)
-    conf.readFields(in)
-  }
-}
-
 class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
   private def create(filename: String): OutputStream = {
     val fs = _fileSystem(filename)
     val hPath = new hadoop.fs.Path(filename)
 
     val os = fs.create(hPath)
-    val codecFactory = new CompressionCodecFactory(conf.conf)
+    val codecFactory = new CompressionCodecFactory(conf.value)
     val codec = codecFactory.getCodec(hPath)
 
     if (codec != null)
@@ -119,7 +107,7 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
           throw e
     }
     if (checkCodec) {
-      val codecFactory = new CompressionCodecFactory(conf.conf)
+      val codecFactory = new CompressionCodecFactory(conf.value)
       val codec = codecFactory.getCodec(hPath)
       if (codec != null)
         codec.createInputStream(is)
@@ -130,23 +118,23 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
   }
 
   def getProperty(name: String): String = {
-    conf.conf.get(name)
+    conf.value.get(name)
   }
 
   def setProperty(name: String, value: String): Unit = {
-    conf.conf.set(name, value)
+    conf.value.set(name, value)
   }
 
   def getProperties: Iterator[Map.Entry[String, String]] = {
-    conf.conf.iterator().asScala
+    conf.value.iterator().asScala
   }
 
   private def _fileSystem(filename: String): hadoop.fs.FileSystem = {
-    new hadoop.fs.Path(filename).getFileSystem(conf.conf)
+    new hadoop.fs.Path(filename).getFileSystem(conf.value)
   }
 
   def fileSystem(filename: String): HadoopFileSystem = {
-    new HadoopFileSystem(filename, conf.conf)
+    new HadoopFileSystem(filename, conf.value)
   }
 
   def getFileSize(filename: String): Long =
@@ -240,7 +228,7 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
     hadoop.fs.FileUtil.copy(
       _fileSystem(src), new hadoop.fs.Path(src),
       _fileSystem(dst), new hadoop.fs.Path(dst),
-      deleteSource, conf.conf)
+      deleteSource, conf.value)
   }
 
   def copyMerge(
@@ -293,7 +281,7 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
     val destPath = new hadoop.fs.Path(destFilename)
     val destFS = _fileSystem(destFilename)
 
-    val codecFactory = new CompressionCodecFactory(conf.conf)
+    val codecFactory = new CompressionCodecFactory(conf.value)
     val codec = Option(codecFactory.getCodec(new hadoop.fs.Path(destFilename)))
     val isBGzip = codec.exists(_.isInstanceOf[BGzipCodec])
 
@@ -336,7 +324,7 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
   def stripCodec(s: String): String = {
     val path = new org.apache.hadoop.fs.Path(s)
 
-    Option(new CompressionCodecFactory(conf.conf)
+    Option(new CompressionCodecFactory(conf.value)
       .getCodec(path))
       .map { codec =>
         val ext = codec.getDefaultExtension
@@ -348,7 +336,7 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
   def getCodec(s: String): String = {
     val path = new org.apache.hadoop.fs.Path(s)
 
-    Option(new CompressionCodecFactory(conf.conf)
+    Option(new CompressionCodecFactory(conf.value)
       .getCodec(path))
       .map { codec =>
         val ext = codec.getDefaultExtension
@@ -359,7 +347,7 @@ class HadoopFS(val conf: SerializableHadoopConfiguration) extends FS {
 
   def fileStatus(filename: String): FileStatus = {
     val p = new hadoop.fs.Path(filename)
-    new HadoopFileStatus(p.getFileSystem(conf.conf).getFileStatus(p))
+    new HadoopFileStatus(p.getFileSystem(conf.value).getFileStatus(p))
   }
 
   def writeObjectFile[T](filename: String)(f: (ObjectOutputStream) => T): T =

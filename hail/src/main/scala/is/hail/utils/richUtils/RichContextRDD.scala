@@ -8,7 +8,7 @@ import org.apache.spark.TaskContext
 import is.hail.utils._
 import is.hail.sparkextras._
 import org.apache.spark.rdd.RDD
-import is.hail.io.fs.{HadoopFS, SerializableHadoopConfiguration}
+import is.hail.io.fs.HadoopFS
 
 import scala.reflect.ClassTag
 

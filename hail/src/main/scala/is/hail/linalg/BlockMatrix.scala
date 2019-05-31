@@ -13,7 +13,7 @@ import is.hail.expr.types._
 import is.hail.expr.types.physical.{PArray, PFloat64, PInt64, PStruct}
 import is.hail.expr.types.virtual._
 import is.hail.io._
-import is.hail.io.fs.{HadoopFS, SerializableHadoopConfiguration}
+import is.hail.io.fs.HadoopFS
 import is.hail.rvd.{RVD, RVDContext, RVDPartitioner}
 import is.hail.sparkextras.ContextRDD
 import is.hail.utils._

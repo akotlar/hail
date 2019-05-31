@@ -1,10 +1,11 @@
 package is.hail.io
 
+import is.hail.utils.SerializableHadoopConfiguration
 import is.hail.SparkSuite
 import is.hail.check.Gen._
 import is.hail.check.Prop._
 import is.hail.check.Properties
-import is.hail.io.fs.{HadoopFS, SerializableHadoopConfiguration}
+import is.hail.io.fs.HadoopFS
 import org.testng.annotations.Test
 
 import scala.language.implicitConversions
