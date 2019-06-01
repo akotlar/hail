@@ -58,7 +58,7 @@ object HailContext {
 
   def sHadoopConf: SerializableHadoopConfiguration = get.sHadoopConf
 
-  def hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = get.hadoopConfBc
+  // def hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = get.hadoopConfBc
 
   def sFS: FS = get.sFS
 
@@ -153,11 +153,11 @@ object HailContext {
   def configureLogging(logFile: String, quiet: Boolean, append: Boolean) {
     val logProps = new Properties()
 
-    logProps.put("log4j.rootLogger", "INFO, logfile")
+    logProps.put("log4j.rootLogger", "DEBUG, logfile")
     logProps.put("log4j.appender.logfile", "org.apache.log4j.FileAppender")
     logProps.put("log4j.appender.logfile.append", append.toString)
     logProps.put("log4j.appender.logfile.file", logFile)
-    logProps.put("log4j.appender.logfile.threshold", "INFO")
+    logProps.put("log4j.appender.logfile.threshold", "DEBUG")
     logProps.put("log4j.appender.logfile.layout", "org.apache.log4j.PatternLayout")
     logProps.put("log4j.appender.logfile.layout.ConversionPattern", HailContext.logFormat)
 
@@ -265,6 +265,20 @@ object HailContext {
         "org.apache.hadoop.io.compress.GzipCodec"
     )
 
+        // Let's create a simple RDD
+    val rdd = sc.parallelize(1 to 10000)
+
+    def printStuff(x:Int):Int = {
+      println(x)
+      x + 1
+    }
+
+    // It doesn't print anything! because of a logic design limitation!
+    rdd.map(printStuff)
+
+    // But you can print the RDD by doing the following:
+    rdd.take(10).foreach(println)
+
     val sFS: FS = new HadoopFS(new SerializableHadoopConfiguration(sparkContext.hadoopConfiguration))
 
     if (!quiet)
@@ -368,6 +382,8 @@ object HailContext {
 
   def maybeGZipAsBGZip[T](force: Boolean)(body: => T): T = {
     println("CALLED maybeGzip")
+    throw new IllegalArgumentException("arg 1 was wrong...");
+
     val fs = HailContext.get.sFS
     if (!force)
       body
@@ -392,9 +408,11 @@ class HailContext private(val sc: SparkContext,
   val tmpDir: String,
   val branchingFactor: Int,
   val optimizerIterations: Int) {
+    println("LOGFILE")
+    println(logFile)
   val hadoopConf: hadoop.conf.Configuration = sc.hadoopConfiguration
   val sHadoopConf: SerializableHadoopConfiguration = new SerializableHadoopConfiguration(hadoopConf)
-  val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
+  // val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
   val sFS: FS = new HadoopFS(sHadoopConf)
   val bcFS: Broadcast[FS] = sc.broadcast(sFS)
   val sparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()

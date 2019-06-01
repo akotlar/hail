@@ -1598,6 +1598,13 @@ object ImportVCFs {
   }
 }
 
+object PrintUtiltity {
+    def print(data:String) = {
+      println(data)
+    }
+}
+
+
 class VCFsReader(
   files: Array[String],
   callFields: Set[String],
@@ -1670,12 +1677,28 @@ class VCFsReader(
     PartitionedVCFPartition(i, start.contig, start.position, end.position): Partition
   }
 
+  
   private val fileInfo: Array[Array[String]] = externalSampleIds.getOrElse {
     // val localBcFs = bcFs
     val shConf = new SerializableHadoopConfiguration(sc.hadoopConfiguration)
     println("SHCONF")
     println(shConf.value.get("io.compression.codecs"))
-    println("\\")
+    println("\\\\")
+
+            // Let's create a simple RDD
+  //   val rdd = sc.parallelize(files)
+  //  val localBcFsConf = sc.broadcast(shConf)
+    // def printStuff(x: AnyRef): Unit = {
+    //   println(x)
+    // }
+
+    // It doesn't print anything! because of a logic design limitation!
+    // rdd.map(printStuff)
+
+    // // But you can print the RDD by doing the following:
+    // rdd.take(files.length).foreach(
+    //   println(_)
+    // )
 
     // Serialization  
       // try
@@ -1701,7 +1724,7 @@ class VCFsReader(
 
     
 
-    val localBcFsConf = sc.broadcast(shConf)
+   
     // val localFile1 = file1
     // val localEntryFloatType = entryFloatType
     // val localCallFields = callFields
@@ -1713,14 +1736,17 @@ class VCFsReader(
     // println(localBcFsConf)
     // println(localBcFsConf.value.value.get("io.compression.codecs"))
     // println("\\")
+    // val util = PrintUtiltity
+    // @transient lazy val log = org.apache.log4j.LogManager.getLogger("myLogger")
+
     println("Before serialize")
     var results: Array[Array[String]] = Array()
     var stuff = sc.parallelize(files, files.length).map { file =>
-      localBcFsConf.value
+      log.fatal("HELLLLOOOOOOO")
     }.collect()
     println("AFTER")
     
-    println(stuff(0).value.get("io.compression.codecs"))
+    // println(stuff(0).value.get("io.compression.codecs"))
     println("\\\\\\\\")
     // println(stuff(1))
     
