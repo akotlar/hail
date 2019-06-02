@@ -1,16 +1,17 @@
 package is.hail.utils
 
 import java.io.{ObjectInputStream, ObjectOutputStream, Serializable}
-import com.esotericsoftware.kryo.{Kryo, KryoSerializable}
 import org.apache.hadoop
 
 class SerializableHadoopConfiguration(@transient var value: hadoop.conf.Configuration) extends Serializable {
   private def writeObject(out: ObjectOutputStream) {
+    info("WRITING")
     out.defaultWriteObject()
     value.write(out)
   }
 
   private def readObject(in: ObjectInputStream) {
+    info("READING")
     value = new hadoop.conf.Configuration(false)
     value.readFields(in)
   }

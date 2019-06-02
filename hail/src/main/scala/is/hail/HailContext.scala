@@ -265,19 +265,25 @@ object HailContext {
         "org.apache.hadoop.io.compress.GzipCodec"
     )
 
+    // println("Before serialize")
+    // var results: Array[Array[String]] = Array()
+    // var stuff = sc.parallelize(files, files.length).map { file =>
+    //   log.fatal("HELLLLOOOOOOO")
+    // }.collect()
+
         // Let's create a simple RDD
-    val rdd = sc.parallelize(1 to 10000)
+    // val rdd = sparkContext.parallelize(1 to 10000)
 
-    def printStuff(x:Int):Int = {
-      println(x)
-      x + 1
-    }
+    // def printStuff(x:Int):Int = {
+    //   println(x)
+    //   x + 1
+    // }
 
-    // It doesn't print anything! because of a logic design limitation!
-    rdd.map(printStuff)
+    // // It doesn't print anything! because of a logic design limitation!
+    // rdd.map(printStuff)
 
-    // But you can print the RDD by doing the following:
-    rdd.take(10).foreach(println)
+    // // But you can print the RDD by doing the following:
+    // rdd.take(10).foreach(println)
 
     val sFS: FS = new HadoopFS(new SerializableHadoopConfiguration(sparkContext.hadoopConfiguration))
 
@@ -286,6 +292,24 @@ object HailContext {
 
     val hailTempDir = TempDir.createTempDir(tmpDir, sFS)
     info(s"Hail temporary directory: $hailTempDir")
+
+  val sHadoopConf: SerializableHadoopConfiguration = new SerializableHadoopConfiguration(sparkContext.hadoopConfiguration)
+  // val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
+
+  //   println("Configuration")
+  //  println("Configuration bc")
+ 
+  // val sFS: FS = new HadoopFS(sHadoopConf)
+  // val bcFS: Broadcast[FS] = sc.broadcast(sFS)
+
+  println("About to start parallelize in class HailContext")
+  // println(hadoopConfBc.value.value)
+  var stuff = sc.parallelize(Array("HELLO", "WORLD"), 2).map { _ =>
+      sHadoopConf.value
+    }.collect()
+    println("AFTER parallelize map in hailcontext")
+
+
     val hc = new HailContext(sparkContext, logFile, hailTempDir, branchingFactor, optimizerIterations)
     sparkContext.uiWebUrl.foreach(ui => info(s"SparkUI: $ui"))
 
@@ -384,16 +408,16 @@ object HailContext {
     println("CALLED maybeGzip")
     throw new IllegalArgumentException("arg 1 was wrong...");
 
-    val fs = HailContext.get.sFS
+    val hadoopConf = HailContext.get.sc.hadoopConfiguration
     if (!force)
       body
     else {
-      val defaultCodecs = fs.getProperty(codecsKey)
-      fs.setProperty(codecsKey, defaultCodecs.replaceAllLiterally(hadoopGzipCodec, hailGzipAsBGZipCodec))
+      val defaultCodecs = hadoopConf.get(codecsKey)
+      hadoopConf.set(codecsKey, defaultCodecs.replaceAllLiterally(hadoopGzipCodec, hailGzipAsBGZipCodec))
       try {
         body
       } finally {
-        fs.setProperty(codecsKey, defaultCodecs)
+        hadoopConf.set(codecsKey, defaultCodecs)
       }
     }
   }
@@ -412,9 +436,23 @@ class HailContext private(val sc: SparkContext,
     println(logFile)
   val hadoopConf: hadoop.conf.Configuration = sc.hadoopConfiguration
   val sHadoopConf: SerializableHadoopConfiguration = new SerializableHadoopConfiguration(hadoopConf)
-  // val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
+  val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
+
+    println("Configuration")
+  println(sc.hadoopConfiguration)
+  println("Configuration bc")
+  println(hadoopConfBc.value.value)
+
   val sFS: FS = new HadoopFS(sHadoopConf)
   val bcFS: Broadcast[FS] = sc.broadcast(sFS)
+
+  println("About to start parallelize in class HailContext")
+  println(hadoopConfBc.value.value)
+  var stuff = sc.parallelize(Array("HELLO", "WORLD"), 2).map { file =>
+      hadoopConfBc.value.value
+    }.collect()
+    println("AFTER parallelize map in hailcontext")
+
   val sparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()
 
   val flags: HailFeatureFlags = new HailFeatureFlags()

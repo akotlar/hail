@@ -1679,11 +1679,17 @@ class VCFsReader(
 
   
   private val fileInfo: Array[Array[String]] = externalSampleIds.getOrElse {
-    // val localBcFs = bcFs
-    val shConf = new SerializableHadoopConfiguration(sc.hadoopConfiguration)
-    println("SHCONF")
-    println(shConf.value.get("io.compression.codecs"))
-    println("\\\\")
+    val localBcFs = bcFs
+    // val shConf = new SerializableHadoopConfiguration(sc.hadoopConfiguration)
+    // println("SHCONF")
+    // println(localBcFs.valu.value.get("io.compression.codecs"))
+    // println("\\\\")
+
+      println("Before serialize")
+    // var results: Array[Array[String]] = Array()
+    // var stuff = sc.parallelize(["hello", "goodbye"], 2).map { file =>
+    //   localBcFs.value.value
+    // }.collect()
 
             // Let's create a simple RDD
   //   val rdd = sc.parallelize(files)
@@ -1741,10 +1747,16 @@ class VCFsReader(
 
     println("Before serialize")
     var results: Array[Array[String]] = Array()
+    // var stuff = sc.parallelize(files, files.length).map { file =>
+    //   localBcFs.value.value
+    // }.collect()
+    // println("AFTER")
+
     var stuff = sc.parallelize(files, files.length).map { file =>
-      log.fatal("HELLLLOOOOOOO")
+      localBcFs.value.getProperty("spark.logConf")
     }.collect()
     println("AFTER")
+    
     
     // println(stuff(0).value.get("io.compression.codecs"))
     println("\\\\\\\\")
