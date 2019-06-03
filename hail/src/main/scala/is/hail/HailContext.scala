@@ -4,7 +4,6 @@ import java.io.{File, InputStream}
 import java.util.Properties
 
 import is.hail.annotations._
-import is.hail.io.fs.{FS, HadoopFS}
 import is.hail.expr.ir.functions.IRFunctionRegistry
 import is.hail.expr.ir.{BaseIR, IRParser, MatrixIR, TextTableReader}
 import is.hail.expr.types.physical.PStruct
@@ -17,7 +16,9 @@ import is.hail.sparkextras.ContextRDD
 import is.hail.table.Table
 import is.hail.utils.{log, _}
 import is.hail.variant.{MatrixTable, ReferenceGenome}
+import is.hail.io.fs.{FS, HadoopFS}
 import org.apache.commons.io.FileUtils
+import org.apache.hadoop
 import org.apache.log4j.{ConsoleAppender, LogManager, PatternLayout, PropertyConfigurator}
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
@@ -26,7 +27,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.json4s.Extraction
 import org.json4s.jackson.JsonMethods
-import org.apache.hadoop
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -56,9 +56,11 @@ object HailContext {
 
   def sc: SparkContext = get.sc
 
+  def hadoopConf: hadoop.conf.Configuration = get.hadoopConf
+
   def sHadoopConf: SerializableHadoopConfiguration = get.sHadoopConf
 
-  // def hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = get.hadoopConfBc
+  def hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = get.hadoopConfBc
 
   def sFS: FS = get.sFS
 
@@ -265,52 +267,10 @@ object HailContext {
         "org.apache.hadoop.io.compress.GzipCodec"
     )
 
-    // println("Before serialize")
-    // var results: Array[Array[String]] = Array()
-    // var stuff = sc.parallelize(files, files.length).map { file =>
-    //   log.fatal("HELLLLOOOOOOO")
-    // }.collect()
-
-        // Let's create a simple RDD
-    // val rdd = sparkContext.parallelize(1 to 10000)
-
-    // def printStuff(x:Int):Int = {
-    //   println(x)
-    //   x + 1
-    // }
-
-    // // It doesn't print anything! because of a logic design limitation!
-    // rdd.map(printStuff)
-
-    // // But you can print the RDD by doing the following:
-    // rdd.take(10).foreach(println)
-
-    val sFS: FS = new HadoopFS(new SerializableHadoopConfiguration(sparkContext.hadoopConfiguration))
-
     if (!quiet)
       ProgressBarBuilder.build(sparkContext)
 
-    val hailTempDir = TempDir.createTempDir(tmpDir, sFS)
-    info(s"Hail temporary directory: $hailTempDir")
-
-  val sHadoopConf: SerializableHadoopConfiguration = new SerializableHadoopConfiguration(sparkContext.hadoopConfiguration)
-  // val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
-
-  //   println("Configuration")
-  //  println("Configuration bc")
- 
-  // val sFS: FS = new HadoopFS(sHadoopConf)
-  // val bcFS: Broadcast[FS] = sc.broadcast(sFS)
-
-  println("About to start parallelize in class HailContext")
-  // println(hadoopConfBc.value.value)
-  var stuff = sc.parallelize(Array("HELLO", "WORLD"), 2).map { _ =>
-      sHadoopConf.value
-    }.collect()
-    println("AFTER parallelize map in hailcontext")
-
-
-    val hc = new HailContext(sparkContext, logFile, hailTempDir, branchingFactor, optimizerIterations)
+    val hc = new HailContext(sparkContext, logFile, tmpDir, branchingFactor, optimizerIterations)
     sparkContext.uiWebUrl.foreach(ui => info(s"SparkUI: $ui"))
 
     var uploadEmail = System.getenv("HAIL_UPLOAD_EMAIL")
@@ -405,10 +365,7 @@ object HailContext {
   private[this] val hailGzipAsBGZipCodec = "is.hail.io.compress.BGzipCodecGZ"
 
   def maybeGZipAsBGZip[T](force: Boolean)(body: => T): T = {
-    println("CALLED maybeGzip")
-    throw new IllegalArgumentException("arg 1 was wrong...");
-
-    val hadoopConf = HailContext.get.sc.hadoopConfiguration
+    val hadoopConf = HailContext.get.hadoopConf
     if (!force)
       body
     else {
@@ -429,31 +386,18 @@ object HailContext {
 
 class HailContext private(val sc: SparkContext,
   val logFile: String,
-  val tmpDir: String,
+  val tmpDirPath: String,
   val branchingFactor: Int,
   val optimizerIterations: Int) {
-    println("LOGFILE")
-    println(logFile)
   val hadoopConf: hadoop.conf.Configuration = sc.hadoopConfiguration
   val sHadoopConf: SerializableHadoopConfiguration = new SerializableHadoopConfiguration(hadoopConf)
   val hadoopConfBc: Broadcast[SerializableHadoopConfiguration] = sc.broadcast(sHadoopConf)
-
-    println("Configuration")
-  println(sc.hadoopConfiguration)
-  println("Configuration bc")
-  println(hadoopConfBc.value.value)
-
   val sFS: FS = new HadoopFS(sHadoopConf)
   val bcFS: Broadcast[FS] = sc.broadcast(sFS)
-
-  println("About to start parallelize in class HailContext")
-  println(hadoopConfBc.value.value)
-  var stuff = sc.parallelize(Array("HELLO", "WORLD"), 2).map { file =>
-      hadoopConfBc.value.value
-    }.collect()
-    println("AFTER parallelize map in hailcontext")
-
   val sparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()
+
+  val tmpDir = TempDir.createTempDir(tmpDirPath, sFS)
+  info(s"Hail temporary directory was made!!: $tmpDir")
 
   val flags: HailFeatureFlags = new HailFeatureFlags()
 
@@ -491,11 +435,8 @@ class HailContext private(val sc: SparkContext,
       }
   }
 
-  def getTemporaryFile(nChar: Int = 10, prefix: Option[String] = None, suffix: Option[String] = None): String = {
-    val fs = new HadoopFS(new SerializableHadoopConfiguration(sc.hadoopConfiguration))
-    fs.getTemporaryFile(tmpDir, nChar, prefix, suffix)
-  }
-    
+  def getTemporaryFile(nChar: Int = 10, prefix: Option[String] = None, suffix: Option[String] = None): String =
+    sFS.getTemporaryFile(tmpDir, nChar, prefix, suffix)
 
   def indexBgen(files: java.util.List[String],
     indexFileMap: java.util.Map[String, String],
@@ -568,9 +509,7 @@ class HailContext private(val sc: SparkContext,
     optPartitioner: Option[Partitioner] = None): RDD[T] = {
     val nPartitions = partFiles.length
 
-    val localBcFS = bcFS
-
-    println("CALLED readPartition")
+    val localHadoopConfBc = bcFS
 
     new RDD[T](sc, Nil) {
       def getPartitions: Array[Partition] =
@@ -579,7 +518,7 @@ class HailContext private(val sc: SparkContext,
       override def compute(split: Partition, context: TaskContext): Iterator[T] = {
         val p = split.asInstanceOf[FilePartition]
         val filename = path + "/parts/" + p.file
-        val in = localBcFS.value.unsafeReader(filename)
+        val in = localHadoopConfBc.value.unsafeReader(filename)
         read(p.index, in, context.taskMetrics().inputMetrics)
       }
 

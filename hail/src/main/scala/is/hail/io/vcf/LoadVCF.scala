@@ -1527,7 +1527,6 @@ case class MatrixVCFReader(
   def apply(tr: TableRead): TableValue = {
     val localCallFields = callFields
     val localFloatType = entryFloatType
-    val headerLinesBc = sc.broadcast(headerLines1)
 
     val requestedType = tr.typ
     assert(PruneDeadFields.isSupertype(requestedType, fullType))
@@ -1626,6 +1625,7 @@ class VCFsReader(
   private val sc = hc.sc
   private val fs = hc.sFS
   private val bcFs = hc.bcFS
+
   private val referenceGenome = rg.map(ReferenceGenome.getReference)
 
   referenceGenome.foreach(_.validateContigRemap(contigRecoding))
@@ -1679,7 +1679,7 @@ class VCFsReader(
 
   
   private val fileInfo: Array[Array[String]] = externalSampleIds.getOrElse {
-    val localBcFs = bcFs
+    val localConfig = bcFs
     // val shConf = new SerializableHadoopConfiguration(sc.hadoopConfiguration)
     // println("SHCONF")
     // println(localBcFs.valu.value.get("io.compression.codecs"))
