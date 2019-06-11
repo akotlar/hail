@@ -9,9 +9,9 @@
 
   <div id="profile-divider"></div>
 
-  {% if g.user %}
+  {% if user %}
   <a href="/user"
-    ><b id="user-name">{{ g.user["name"] }}</b></a
+    ><b id="user-name">{{ user["name"] }}</b></a
   >
   <form action="/logout" method="POST">
     <button class="link-button" type="submit">

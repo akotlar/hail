@@ -38,7 +38,7 @@ class JWTClient:
     def encode(self, payload):
         return (jwt.encode(
             payload, self.secret_key, algorithm=JWTClient.__ALGORITHM)
-                .decode('ascii'))
+            .decode('ascii'))
 
 
 def get_domain(host):
