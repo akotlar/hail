@@ -64,7 +64,7 @@ case class MatrixValue(
   def colsTableValue: TableValue = TableValue(typ.colsTableType, globals, colsRVD())
 
   private def writeCols(fs: FS, path: String, codecSpec: CodecSpec) {
-    val partitionCounts = AbstractRVDSpec.writeSingle(fs, path + "/rows", typ.colType.physicalType, codecSpec, colValues.value)
+    val partitionCounts = AbstractRVDSpec.writeSingle(fs, path + "/rows", PType.canonical(typ.colType).asInstanceOf[PStruct], codecSpec, colValues.value)
 
     val colsSpec = TableSpec(
       FileFormat.version.rep,
@@ -80,9 +80,9 @@ case class MatrixValue(
   }
 
   private def writeGlobals(fs: FS, path: String, codecSpec: CodecSpec) {
-    val partitionCounts = AbstractRVDSpec.writeSingle(fs, path + "/rows", typ.globalType.physicalType, codecSpec, Array(globals.value))
+    val partitionCounts = AbstractRVDSpec.writeSingle(fs, path + "/rows", PType.canonical(typ.globalType).asInstanceOf[PStruct], codecSpec, Array(globals.value))
 
-    AbstractRVDSpec.writeSingle(fs, path + "/globals", TStruct.empty().physicalType, codecSpec, Array[Annotation](Row()))
+    AbstractRVDSpec.writeSingle(fs, path + "/globals", PStruct.empty(), codecSpec, Array[Annotation](Row()))
 
     val globalsSpec = TableSpec(
       FileFormat.version.rep,
@@ -213,7 +213,7 @@ case class MatrixValue(
 
   def colsRVD(): RVD = {
     val hc = HailContext.get
-    val colPType = typ.colType.physicalType
+    val colPType = PType.canonical(typ.colType).asInstanceOf[PStruct]
 
     RVD.coerce(
       typ.colsTableType.canonicalRVDType,
@@ -285,7 +285,7 @@ case class MatrixValue(
       tt.globalType,
       HailContext.backend)
 
-    TableValue(tt, newGlobals, rvd.cast(tt.rowType.physicalType))
+    TableValue(tt, newGlobals, rvd.cast(tt.canonicalPType))
   }
 }
 

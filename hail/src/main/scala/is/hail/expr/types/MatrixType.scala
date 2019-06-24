@@ -2,7 +2,7 @@ package is.hail.expr.types
 
 import is.hail.annotations.Annotation
 import is.hail.expr.ir.{Env, IRParser, LowerMatrixIR}
-import is.hail.expr.types.physical.{PArray, PStruct}
+import is.hail.expr.types.physical.{PArray, PStruct, PType}
 import is.hail.expr.types.virtual._
 import is.hail.rvd.RVDType
 import is.hail.utils._
@@ -95,7 +95,7 @@ case class MatrixType(
     TableType(resultStruct, rowKey ++ colKey, globalType)
   }
 
-  def canonicalRVDType: RVDType = RVDType(rowType.appendKey(MatrixType.entriesIdentifier, TArray(entryType)).physicalType, rowKey)
+  def canonicalRVDType: RVDType = RVDType(PType.canonical(rowType.appendKey(MatrixType.entriesIdentifier, TArray(entryType))).asInstanceOf[PStruct], rowKey)
 
   def canonicalTableType: TableType = toTableType(LowerMatrixIR.entriesFieldName, LowerMatrixIR.colsFieldName)
 
