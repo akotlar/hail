@@ -1,6 +1,7 @@
 package is.hail.io.bgen
 
 import is.hail.HailContext
+import is.hail.expr.types.physical.PStruct
 import is.hail.expr.types.virtual.TStruct
 import is.hail.io.CodecSpec
 import is.hail.io.index.{IndexWriter, InternalNodeBuilder, LeafNodeBuilder}
@@ -54,7 +55,7 @@ object IndexBgen {
     val headers = LoadBgen.getFileHeaders(fs, bgenFilePaths)
     LoadBgen.checkVersionTwo(headers)
 
-    val annotationType = +TStruct()
+    val annotationType = PStruct(required = true)
 
     val settings: BgenSettings = BgenSettings(
       0, // nSamples not used if there are no entries
@@ -96,8 +97,8 @@ object IndexBgen {
     val crvd = BgenRDD(hc.sc, partitions, settings, null)
 
     val codecSpec = CodecSpec.default
-    val makeLeafEncoder = codecSpec.buildEncoder(LeafNodeBuilder.typ(indexKeyType, annotationType).physicalType)
-    val makeInternalEncoder = codecSpec.buildEncoder(InternalNodeBuilder.typ(indexKeyType, annotationType).physicalType)
+    val makeLeafEncoder = codecSpec.buildEncoder(LeafNodeBuilder.ptyp(indexKeyType, annotationType).physicalType)
+    val makeInternalEncoder = codecSpec.buildEncoder(InternalNodeBuilder.ptyp(indexKeyType, annotationType).physicalType)
 
     RVD.unkeyed(rowType, crvd)
       .repartition(partitioner, shuffle = true)

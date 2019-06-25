@@ -7,6 +7,7 @@ import java.util.Map.Entry
 import is.hail.annotations._
 import is.hail.expr.types.virtual.Type
 import is.hail.expr.ir.IRParser
+import is.hail.expr.types.physical.PType
 import is.hail.io._
 import is.hail.io.bgen.BgenSettings
 import is.hail.utils._
@@ -19,17 +20,17 @@ import org.json4s.jackson.JsonMethods
 object IndexReaderBuilder {
   def apply(fs: FS, path: String): (FS, String, Int) => IndexReader = {
     val metadata = IndexReader.readMetadata(fs, path)
-    val keyType = IRParser.parseType(metadata.keyType)
-    val annotationType = IRParser.parseType(metadata.annotationType)
+    val keyType = IRParser.parsePType((metadata.keyType)
+    val annotationType = IRParser.parsePType(metadata.annotationType)
     IndexReaderBuilder(keyType, annotationType)
   }
 
   def apply(settings: BgenSettings): (FS, String, Int) => IndexReader =
     IndexReaderBuilder(settings.matrixType.rowKeyStruct, settings.indexAnnotationType)
 
-  def apply(keyType: Type, annotationType: Type): (FS, String, Int) => IndexReader = {
-    val leafType = LeafNodeBuilder.typ(keyType, annotationType).physicalType
-    val internalType = InternalNodeBuilder.typ(keyType, annotationType).physicalType
+  def apply(keyType: PType, annotationType: PType): (FS, String, Int) => IndexReader = {
+    val leafType = LeafNodeBuilder.ptyp(keyType, annotationType)
+    val internalType = InternalNodeBuilder.ptyp(keyType, annotationType)
 
     val codecSpec = CodecSpec.default
     val leafDecoder = codecSpec.buildDecoder(leafType, leafType)
@@ -60,7 +61,7 @@ class IndexReader(fs: FS,
   cacheCapacity: Int = 8,
   leafDecoderBuilder: (InputStream) => Decoder,
   internalDecoderBuilder: (InputStream) => Decoder,
-  types: Option[(Type, Type)] = None // must be defined if not called on the driver node for RG serialization reasons
+  types: Option[(PType, PType)] = None // must be defined if not called on the driver node for RG serialization reasons
 ) extends AutoCloseable {
   private[io] val metadata = IndexReader.readMetadata(fs, path)
   val branchingFactor = metadata.branchingFactor
@@ -74,8 +75,8 @@ class IndexReader(fs: FS,
     case Some((k, a)) =>(k, a)
     case None => IRParser.parseType(metadata.keyType) -> IRParser.parseType(metadata.annotationType)
   }
-  val leafType = LeafNodeBuilder.typ(keyType, annotationType)
-  val leafPType = leafType.physicalType
+  val leafType = LeafNodeBuilder.ptyp(keyType, annotationType)
+  val leafPType = leafType
   val internalType = InternalNodeBuilder.typ(keyType, annotationType)
   val internalPType = internalType.physicalType
   val ordering = keyType.ordering

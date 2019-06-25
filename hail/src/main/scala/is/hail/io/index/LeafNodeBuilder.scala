@@ -1,29 +1,30 @@
 package is.hail.io.index
 
 import is.hail.annotations.{Annotation, RegionValueBuilder}
+import is.hail.expr.types.physical.{PArray, PInt64, PStruct, PType}
 import is.hail.expr.types.virtual.{TArray, TInt64, TStruct, Type}
 import is.hail.utils.ArrayBuilder
 
 object LeafNodeBuilder {
-  def typ(keyType: Type, annotationType: Type) = TStruct(
-    "first_idx" -> +TInt64(),
-    "keys" -> +TArray(+TStruct(
+  def ptyp(keyType: PType, annotationType: PType) = PStruct(
+    "first_idx" -> PInt64(required = true),
+    "keys" -> PArray(PStruct(
       "key" -> keyType,
-      "offset" -> +TInt64(),
+      "offset" -> PInt64(required = true),
       "annotation" -> annotationType
     ), required = true)
   )
 }
 
-class LeafNodeBuilder(keyType: Type, annotationType: Type, var firstIdx: Long) {
+class LeafNodeBuilder(keyType: PType, annotationType: PType, var firstIdx: Long) {
   val keys = new ArrayBuilder[Any]()
   val recordOffsets = new ArrayBuilder[Long]()
   val annotations = new ArrayBuilder[Any]()
   var size = 0
-  val typ = LeafNodeBuilder.typ(keyType, annotationType)
+  val typ = LeafNodeBuilder.ptyp(keyType, annotationType)
 
   def write(rvb: RegionValueBuilder): Long = {
-    rvb.start(typ.physicalType)
+    rvb.start(typ)
     rvb.startStruct()
 
     rvb.addLong(firstIdx)
@@ -32,9 +33,9 @@ class LeafNodeBuilder(keyType: Type, annotationType: Type, var firstIdx: Long) {
     var i = 0
     while (i < size) {
       rvb.startStruct()
-      rvb.addAnnotation(keyType, keys(i))
+      rvb.addAnnotation(keyType.virtualType, keys(i))
       rvb.addLong(recordOffsets(i))
-      rvb.addAnnotation(annotationType, annotations(i))
+      rvb.addAnnotation(annotationType.virtualType, annotations(i))
       rvb.endStruct()
       i += 1
     }

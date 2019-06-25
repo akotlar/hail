@@ -4,6 +4,7 @@ import is.hail.HailContext
 import is.hail.expr.ir
 import is.hail.expr.ir.{IRParser, IRParserEnvironment, Interpret, LowerMatrixIR, MatrixHybridReader, Pretty, TableIR, TableRead, TableValue}
 import is.hail.expr.types._
+import is.hail.expr.types.physical.PType
 import is.hail.expr.types.virtual._
 import is.hail.io._
 import is.hail.io.index.IndexReader
@@ -40,8 +41,8 @@ case class BgenFileMetadata(
   contigRecoding: Map[String, String],
   skipInvalidLoci: Boolean,
   nVariants: Long,
-  indexKeyType: Type,
-  indexAnnotationType: Type,
+  indexKeyType: PType,
+  indexAnnotationType: PType,
   rangeBounds: Interval
 )
 

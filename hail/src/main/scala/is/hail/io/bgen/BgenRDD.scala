@@ -4,7 +4,7 @@ import is.hail.annotations._
 import is.hail.asm4s.AsmFunction4
 import is.hail.backend.BroadcastValue
 import is.hail.expr.types._
-import is.hail.expr.types.physical.PStruct
+import is.hail.expr.types.physical.{PStruct, PType}
 import is.hail.expr.types.virtual.{TStruct, Type}
 import is.hail.io.HadoopFSDataBinaryReader
 import is.hail.io.index.{IndexReader, IndexReaderBuilder, LeafChild}
@@ -39,7 +39,7 @@ case class BgenSettings(
   dropCols: Boolean,
   rowFields: RowFields,
   rgBc: Option[BroadcastValue[ReferenceGenome]],
-  indexAnnotationType: Type
+  indexAnnotationType: PType
 ) {
   val (includeGT, includeGP, includeDosage) = entries match {
     case NoEntries => (false, false, false)
