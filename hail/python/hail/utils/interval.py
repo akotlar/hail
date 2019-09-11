@@ -22,6 +22,17 @@ class Interval(object):
         Interval includes start.
     includes_end : :obj:`bool`
         Interval includes end.
+
+    Note
+    ----
+    This object refers to the Python value returned by taking or collecting
+    Hail expressions, e.g. ``mt.interval.take(5)``. This is rare; it is much
+    more common to manipulate the :class:`.IntervalExpression` object, which is
+    constructed using the following functions:
+
+     - :func:`.interval`
+     - :func:`.locus_interval`
+     - :func:`.parse_locus_interval`
     """
 
     @typecheck_method(start=anytype,
@@ -45,7 +56,7 @@ class Interval(object):
         self._includes_end = includes_end
 
     def __str__(self):
-        if isinstance(self._start, Locus) and self._start.contig == self._end.contig:
+        if isinstance(self._start, hl.genetics.Locus) and self._start.contig == self._end.contig:
             bounds = f'{self._start}-{self._end.position}'
         else:
             bounds = f'{self._start}-{self._end}'

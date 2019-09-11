@@ -1,12 +1,9 @@
 package is.hail.backend.local
 
 import is.hail.expr.ir._
-import is.hail.HailContext
-import is.hail.expr.JSONAnnotationImpex
+import is.hail.cxx
 import is.hail.expr.types.virtual._
-import is.hail.rvd.AbstractRVDSpec
 import is.hail.utils._
-import is.hail.variant.RVDComponentSpec
 import org.json4s.jackson.JsonMethods
 
 case class LocalBinding(name: String, value: IR)
@@ -24,7 +21,7 @@ case class LocalTableIR(
 
   def close(x: IR): IR = close(x, globals)
 
-  def closedGlobals(): IR = globals match {
+  def closedGlobals(): IR = (globals: @unchecked) match {
     case LocalBinding(g, gv) :: rest =>
       close(gv, rest)
   }
@@ -33,6 +30,32 @@ case class LocalTableIR(
 }
 
 object LowerTableIR {
+  def apply(ir0: IR, timer: Option[ExecutionTimer], optimize: Boolean = true): IR = {
+
+    def opt(context: String, ir: IR): IR =
+      Optimize(ir, noisy = true, canGenerateLiterals = true,
+        Some(timer.map(t => s"${ t.context }: $context")
+          .getOrElse(context)))
+
+    def time(context: String, ir: (String) => IR): IR =
+      timer.map(t => t.time(ir(context), context))
+        .getOrElse(ir(context))
+
+    var ir = ir0
+
+    ir = ir.unwrap
+    if (optimize) { ir = time( "first pass", opt(_, ir)) }
+
+    ir = time("lowering MatrixIR", _ => LowerMatrixIR(ir))
+
+    if (optimize) { ir = time("after MatrixIR lowering", opt(_, ir)) }
+
+    ir = time("lowering TableIR", _ => LowerTableIR.lower(ir))
+
+    if (optimize) { ir = time("after TableIR lowering", opt(_, ir)) }
+    ir
+  }
+
   def lower(ir: BaseIR): BaseIR = ir match {
     case ir: IR => lower(ir)
     case tir: TableIR => lower(tir)
@@ -131,6 +154,7 @@ object LowerTableIR {
               ArrayRange(I32(0), I32(n.toInt), I32(1)),
               i,
               ArrayRef(Ref(rows, p.rows.typ), Ref(i, TInt32()))))))
+    case _ => throw new cxx.CXXUnsupportedOperation(tir.toString)
   }
 
   def lower(mir: MatrixIR): MatrixIR = ???

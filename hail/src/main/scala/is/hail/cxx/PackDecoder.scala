@@ -92,7 +92,7 @@ object PackDecoder {
 
     s"""
        |${ len.define }
-       |${ sab.start(len, clearMissing = false) }
+       |${ sab.start(len.toString, clearMissing = false) }
        |store_address($off, ${ sab.end() });
        |${ if (rt.elementType.required) "" else s"$input_buf_ptr->read_bytes(${ sab.end() } + 4, ${ rt.cxxNMissingBytes(s"$len") });" }
        |while (${ sab.idx } < $len) {
@@ -167,7 +167,7 @@ object PackDecoder {
     case t2: PBaseStruct => decodeBaseStruct(t2, rt.asInstanceOf[PBaseStruct], input_buf_ptr, region, off, fb)
   }
 
-  def apply(t: PType, rt: PType, bufSpec: BufferSpec, tub: TranslationUnitBuilder): Class = {
+  def apply(t: PType, rt: PType, inputStreamType: String, bufSpec: BufferSpec, tub: TranslationUnitBuilder): Class = {
     tub.include("hail/hail.h")
     tub.include("hail/Decoder.h")
     tub.include("hail/Region.h")
@@ -177,25 +177,25 @@ object PackDecoder {
 
     val decoderBuilder = tub.buildClass(tub.genSym("Decoder"), "NativeObj")
 
-    val bufType = bufSpec.nativeInputBufferType
+    val bufType = bufSpec.nativeInputBufferType(inputStreamType)
     val buf = decoderBuilder.variable("buf", s"std::shared_ptr<$bufType>")
     decoderBuilder += buf
 
-    decoderBuilder += s"${ decoderBuilder.name }(std::shared_ptr<InputStream> is) : $buf(std::make_shared<$bufType>(is)) { }"
+    decoderBuilder += s"${ decoderBuilder.name }(std::shared_ptr<$inputStreamType> is) : $buf(std::make_shared<$bufType>(is)) { }"
 
-    val rowFB = decoderBuilder.buildMethod("decode_row", Array("Region *" -> "region"), "char *", const = true)
-    val region = rowFB.getArg(0)
-    val initialSize = rt match {
-      case _: PArray | _: PBinary => 8
-      case _ => rt.byteSize
+    val (valueType, initialSize, returnVal) = rt match {
+      case typ if typ.isPrimitive =>
+        (typeToCXXType(rt), rt.byteSize, { r: Variable => s"*reinterpret_cast<${typeToCXXType(rt)} *>($r)" })
+      case _: PArray | _: PBinary => ("char *", 8, { r: Variable => s"load_address($r)" })
+      case _ => ("char *", rt.byteSize, { r: Variable => s"$r" })
     }
+
+    val rowFB = decoderBuilder.buildMethod("decode_row", Array("Region *" -> "region"), valueType, const = true)
+    val region = rowFB.getArg(0)
     val row = rowFB.variable("row", "char *", s"$region->allocate(${ rt.alignment }, $initialSize)")
     rowFB += row.define
     rowFB += decode(t.fundamentalType, rt.fundamentalType, buf.ref, region.ref, row.ref, rowFB)
-    rowFB += (rt match {
-      case _: PArray | _: PBinary => s"return load_address($row);"
-      case _ => s"return $row;"
-    })
+    rowFB += s"return ${ returnVal(row) };"
     rowFB.end()
 
     val byteFB = decoderBuilder.buildMethod("decode_byte", Array(), "char", const = true)
@@ -209,7 +209,7 @@ object PackDecoder {
     assert(t.isInstanceOf[PBaseStruct] || t.isInstanceOf[PArray])
     val tub = new TranslationUnitBuilder()
 
-    val decoder = apply(t, rt, bufSpec, tub)
+    val decoder = apply(t, rt, "InputStream", bufSpec, tub)
     
     tub.include("hail/Decoder.h")
     tub.include("hail/ObjectArray.h")

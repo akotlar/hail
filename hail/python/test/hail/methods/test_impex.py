@@ -11,10 +11,36 @@ from hail.utils import new_temp_file, FatalError, run_command, uri_path
 setUpModule = startTestHailContext
 tearDownModule = stopTestHailContext
 
+_FLOAT_INFO_FIELDS = [
+    'BaseQRankSum',
+    'ClippingRankSum',
+    'FS',
+    'GQ_MEAN',
+    'GQ_STDDEV',
+    'HWP',
+    'HaplotypeScore',
+    'InbreedingCoeff',
+    'MQ',
+    'MQRankSum',
+    'QD',
+    'ReadPosRankSum',
+    'VQSLOD',
+]
+
+_FLOAT_ARRAY_INFO_FIELDS = ['AF', 'MLEAF']
+
 
 class VCFTests(unittest.TestCase):
     def test_info_char(self):
         self.assertEqual(hl.import_vcf(resource('infochar.vcf')).count_rows(), 1)
+
+    def test_info_float64(self):
+        """Test that floating-point info fields are 64-bit regardless of the entry float type"""
+        mt = hl.import_vcf(resource('infochar.vcf'), entry_float_type=hl.tfloat32)
+        for f in _FLOAT_INFO_FIELDS:
+            self.assertEqual(mt['info'][f].dtype, hl.tfloat64)
+        for f in _FLOAT_ARRAY_INFO_FIELDS:
+            self.assertEqual(mt['info'][f].dtype, hl.tarray(hl.tfloat64))
 
     def test_glob(self):
         full = hl.import_vcf(resource('sample.vcf'))
@@ -45,6 +71,18 @@ class VCFTests(unittest.TestCase):
         with self.assertRaisesRegex(FatalError, 'invalid sample IDs'):
             (hl.import_vcf([resource('sample.vcf'), t])
              ._force_count_rows())
+
+    def test_filter(self):
+        mt = hl.import_vcf(resource('malformed.vcf'), filter='rs685723')
+        mt._force_count_rows()
+
+        mt = hl.import_vcf(resource('sample.vcf'), filter=r'\trs\d+\t')
+        assert mt.aggregate_rows(hl.agg.all(hl.is_missing(mt.rsid)))
+
+    def test_find_replace(self):
+        mt = hl.import_vcf(resource('sample.vcf'), find_replace=(r'\trs\d+\t', '\t.\t'))
+        mt.rows().show()
+        assert mt.aggregate_rows(hl.agg.all(hl.is_missing(mt.rsid)))
 
     def test_haploid(self):
         expected = hl.Table.parallelize(
@@ -113,6 +151,12 @@ class VCFTests(unittest.TestCase):
     def test_import_vcf_can_import_float_array_format(self):
         mt = hl.import_vcf(resource('floating_point_array.vcf'))
         self.assertTrue(mt.aggregate_entries(hl.agg.all(mt.numeric_array == [1.5, 2.5])))
+        self.assertEqual(hl.tarray(hl.tfloat64), mt['numeric_array'].dtype)
+
+    def test_import_vcf_can_import_float32_array_format(self):
+        mt = hl.import_vcf(resource('floating_point_array.vcf'), entry_float_type=hl.tfloat32)
+        self.assertTrue(mt.aggregate_entries(hl.agg.all(mt.numeric_array == [1.5, 2.5])))
+        self.assertEqual(hl.tarray(hl.tfloat32), mt['numeric_array'].dtype)
 
     def test_import_vcf_can_import_negative_numbers(self):
         mt = hl.import_vcf(resource('negative_format_fields.vcf'))
@@ -200,25 +244,45 @@ class VCFTests(unittest.TestCase):
         # are py4 JavaMaps, not dicts, so can't use assertDictEqual
         self.assertEqual(vcf_metadata, metadata_imported)
 
+    def test_export_vcf_empty_format(self):
+        mt = hl.import_vcf(resource('sample.vcf.bgz')).select_entries()
+        tmp = new_temp_file(suffix="vcf")
+        hl.export_vcf(mt, tmp)
+
+        assert hl.import_vcf(tmp)._same(mt)
+
+    def test_export_vcf_no_gt(self):
+        mt = hl.import_vcf(resource('sample.vcf.bgz')).drop('GT')
+        tmp = new_temp_file(suffix="vcf")
+        hl.export_vcf(mt, tmp)
+
+        assert hl.import_vcf(tmp)._same(mt)
+
+    def test_export_vcf_no_alt_alleles(self):
+        mt = hl.import_vcf(resource('gvcfs/HG0096_excerpt.g.vcf'), reference_genome='GRCh38')
+        self.assertEqual(mt.filter_rows(hl.len(mt.alleles) == 1).count_rows(), 5)
+
+        tmp = new_temp_file(suffix="vcf")
+        hl.export_vcf(mt, tmp)
+        mt2 = hl.import_vcf(tmp, reference_genome='GRCh38')
+        self.assertTrue(mt._same(mt2))
+
+    @skip_unless_spark_backend()
     def test_import_vcfs(self):
         path = resource('sample.vcf.bgz')
         parts = [
-                    {'start': {'locus': {'contig': '20', 'position': 1}},
-                     'end': {'locus': {'contig': '20', 'position': 13509135}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                    {'start': {'locus': {'contig': '20', 'position': 13509136}},
-                     'end': {'locus': {'contig': '20', 'position': 16493533}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                    {'start': {'locus': {'contig': '20', 'position': 16493534}},
-                     'end': {'locus': {'contig': '20', 'position': 20000000}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                ]
-        parts_str = json.dumps(parts)
-        vcf1 = hl.import_vcf(path)
-        vcf2 = hl.import_vcfs([path], parts_str)[0]
+            hl.Interval(start=hl.Struct(locus=hl.Locus('20', 1)),
+                        end=hl.Struct(locus=hl.Locus('20', 13509135)),
+                        includes_end=True),
+            hl.Interval(start=hl.Struct(locus=hl.Locus('20', 13509136)),
+                        end=hl.Struct(locus=hl.Locus('20', 16493533)),
+                        includes_end=True),
+            hl.Interval(start=hl.Struct(locus=hl.Locus('20', 16493534)),
+                        end=hl.Struct(locus=hl.Locus('20', 20000000)),
+                        includes_end=True)
+        ]
+        vcf1 = hl.import_vcf(path).key_rows_by('locus')
+        vcf2 = hl.import_vcfs([path], parts)[0]
         self.assertEqual(len(parts), vcf2.n_partitions())
         self.assertTrue(vcf1._same(vcf2))
 
@@ -236,43 +300,53 @@ class VCFTests(unittest.TestCase):
         self.assertEqual(hl.filter_intervals(vcf2, interval_b).n_partitions(), 2)
         self.assertEqual(hl.filter_intervals(vcf2, interval_c).n_partitions(), 3)
 
+    @skip_unless_spark_backend()
     def test_import_vcfs_subset(self):
         path = resource('sample.vcf.bgz')
         parts = [
-                    {'start': {'locus': {'contig': '20', 'position': 13509136}},
-                     'end': {'locus': {'contig': '20', 'position': 16493533}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                ]
-        parts_str = json.dumps(parts)
-        vcf1 = hl.import_vcf(path)
-        vcf2 = hl.import_vcfs([path], parts_str)[0]
+            hl.Interval(start=hl.Struct(locus=hl.Locus('20', 13509136)),
+                        end=hl.Struct(locus=hl.Locus('20', 16493533)),
+                        includes_end=True)
+        ]
+        vcf1 = hl.import_vcf(path).key_rows_by('locus')
+        vcf2 = hl.import_vcfs([path], parts)[0]
         interval = [hl.parse_locus_interval('[20:13509136-16493533]')]
         filter1 = hl.filter_intervals(vcf1, interval)
         self.assertTrue(vcf2._same(filter1))
         self.assertEqual(len(parts), vcf2.n_partitions())
 
+    def test_vcf_parser_golden_master(self):
+        files = [(resource('ex.vcf'), 'GRCh37'),
+                 (resource('sample.vcf'), 'GRCh37'),
+                 (resource('gvcfs/HG00096.g.vcf.gz'), 'GRCh38')]
+        for vcf_path, rg in files:
+            vcf = hl.import_vcf(
+                vcf_path,
+                reference_genome=rg,
+                array_elements_required=False,
+                force_bgz=True)
+            mt = hl.read_matrix_table(vcf_path + '.mt')
+            self.assertTrue(mt._same(vcf))
+
+
+    @skip_unless_spark_backend()
     def test_import_multiple_vcfs(self):
         _paths = ['gvcfs/HG00096.g.vcf.gz', 'gvcfs/HG00268.g.vcf.gz']
         paths = [resource(p) for p in _paths]
         parts = [
-                    {'start': {'locus': {'contig': 'chr20', 'position': 17821257}},
-                     'end':   {'locus': {'contig': 'chr20', 'position': 18708366}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                    {'start': {'locus': {'contig': 'chr20', 'position': 18708367}},
-                     'end':   {'locus': {'contig': 'chr20', 'position': 19776611}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                    {'start': {'locus': {'contig': 'chr20', 'position': 19776612}},
-                     'end':   {'locus': {'contig': 'chr20', 'position': 21144633}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                ]
+            hl.Interval(start=hl.Struct(locus=hl.Locus('chr20', 17821257, reference_genome='GRCh38')),
+                        end=hl.Struct(locus=hl.Locus('chr20', 18708366, reference_genome='GRCh38')),
+                        includes_end=True),
+            hl.Interval(start=hl.Struct(locus=hl.Locus('chr20', 18708367, reference_genome='GRCh38')),
+                        end=hl.Struct(locus=hl.Locus('chr20', 19776611, reference_genome='GRCh38')),
+                        includes_end=True),
+            hl.Interval(start=hl.Struct(locus=hl.Locus('chr20', 19776612, reference_genome='GRCh38')),
+                        end=hl.Struct(locus=hl.Locus('chr20', 21144633, reference_genome='GRCh38')),
+                        includes_end=True)
+        ]
         int0 = hl.parse_locus_interval('[chr20:17821257-18708366]', reference_genome='GRCh38')
         int1 = hl.parse_locus_interval('[chr20:18708367-19776611]', reference_genome='GRCh38')
-        parts_str = json.dumps(parts)
-        hg00096, hg00268 = hl.import_vcfs(paths, parts_str, reference_genome='GRCh38')
+        hg00096, hg00268 = hl.import_vcfs(paths, parts, reference_genome='GRCh38')
         filt096 = hl.filter_intervals(hg00096, [int0])
         filt268 = hl.filter_intervals(hg00268, [int1])
         self.assertEqual(1, filt096.n_partitions())
@@ -281,30 +355,28 @@ class VCFTests(unittest.TestCase):
         pos268 = set(filt268.locus.position.collect())
         self.assertFalse(pos096 & pos268)
 
+    @skip_unless_spark_backend()
     def test_combiner_works(self):
         from hail.experimental.vcf_combiner import transform_one, combine_gvcfs
         _paths = ['gvcfs/HG00096.g.vcf.gz', 'gvcfs/HG00268.g.vcf.gz']
         paths = [resource(p) for p in _paths]
         parts = [
-                    {'start': {'locus': {'contig': 'chr20', 'position': 17821257}},
-                     'end':   {'locus': {'contig': 'chr20', 'position': 18708366}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                    {'start': {'locus': {'contig': 'chr20', 'position': 18708367}},
-                     'end':   {'locus': {'contig': 'chr20', 'position': 19776611}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                    {'start': {'locus': {'contig': 'chr20', 'position': 19776612}},
-                     'end':   {'locus': {'contig': 'chr20', 'position': 21144633}},
-                     'includeStart': True,
-                     'includeEnd': True},
-                ]
-        parts_str = json.dumps(parts)
+            hl.Interval(start=hl.Struct(locus=hl.Locus('chr20', 17821257, reference_genome='GRCh38')),
+                        end=hl.Struct(locus=hl.Locus('chr20', 18708366, reference_genome='GRCh38')),
+                        includes_end=True),
+            hl.Interval(start=hl.Struct(locus=hl.Locus('chr20', 18708367, reference_genome='GRCh38')),
+                        end=hl.Struct(locus=hl.Locus('chr20', 19776611, reference_genome='GRCh38')),
+                        includes_end=True),
+            hl.Interval(start=hl.Struct(locus=hl.Locus('chr20', 19776612, reference_genome='GRCh38')),
+                        end=hl.Struct(locus=hl.Locus('chr20', 21144633, reference_genome='GRCh38')),
+                        includes_end=True)
+        ]
         vcfs = [transform_one(mt.annotate_rows(info=mt.info.annotate(
             MQ_DP=hl.null(hl.tint32),
             VarDP=hl.null(hl.tint32),
             QUALapprox=hl.null(hl.tint32))))
-                for mt in hl.import_vcfs(paths, parts_str, reference_genome='GRCh38')]
+                for mt in hl.import_vcfs(paths, parts, reference_genome='GRCh38',
+                                         array_elements_required=False)]
         comb = combine_gvcfs(vcfs)
         self.assertEqual(len(parts), comb.n_partitions())
         comb._force_count_rows()
@@ -612,7 +684,6 @@ class BGENTests(unittest.TestCase):
                               entry_fields=[],
                               sample_file=resource('example.sample'))
         self.assertEqual(bgen.entry.dtype, hl.tstruct())
-        bgen._jmt.typecheck()
 
     def test_import_bgen_no_reference(self):
         hl.index_bgen(resource('example.8bits.bgen'),
@@ -625,6 +696,8 @@ class BGENTests(unittest.TestCase):
         self.assertEqual(bgen.count_rows(), 199)
 
     def test_import_bgen_skip_invalid_loci(self):
+        # Note: the skip_invalid_loci.bgen has 16-bit probabilities, and Hail
+        # will crash if the genotypes are decoded
         hl.index_bgen(resource('skip_invalid_loci.bgen'),
                       reference_genome='GRCh37',
                       skip_invalid_loci=True)
@@ -632,7 +705,7 @@ class BGENTests(unittest.TestCase):
         mt = hl.import_bgen(resource('skip_invalid_loci.bgen'),
                             entry_fields=[],
                             sample_file=resource('skip_invalid_loci.sample'))
-        self.assertTrue(mt._force_count_rows() == 3)
+        self.assertTrue(mt.rows().count() == 3)
 
         with self.assertRaisesRegex(FatalError, 'Invalid locus'):
             hl.index_bgen(resource('skip_invalid_loci.bgen'))
@@ -640,7 +713,7 @@ class BGENTests(unittest.TestCase):
             mt = hl.import_bgen(resource('skip_invalid_loci.bgen'),
                                 entry_fields=[],
                                 sample_file=resource('skip_invalid_loci.sample'))
-            mt._force_count_rows()
+            mt.rows().count()
 
     def test_import_bgen_gavin_example(self):
         recoding = {'0{}'.format(i): str(i) for i in range(1, 10)}
@@ -1003,6 +1076,50 @@ class BGENTests(unittest.TestCase):
             index_file_map = {bgen_file: index_file}
             hl.index_bgen(bgen_file, index_file_map=index_file_map)
 
+    def test_export_bgen(self):
+        bgen = hl.import_bgen(resource('example.8bits.bgen'),
+                              entry_fields=['GP'],
+                              sample_file=resource('example.sample'))
+        tmp = new_temp_file()
+        hl.export_bgen(bgen, tmp)
+        hl.index_bgen(tmp + '.bgen')
+        bgen2 = hl.import_bgen(tmp + '.bgen',
+                               entry_fields=['GP'],
+                               sample_file=tmp + '.sample')
+        assert bgen._same(bgen2)
+
+    def test_export_bgen_parallel(self):
+        bgen = hl.import_bgen(resource('example.8bits.bgen'),
+                              entry_fields=['GP'],
+                              sample_file=resource('example.sample'),
+                              n_partitions=3)
+        # tmp = new_temp_file()
+        tmp = '/tmp/foo'
+        hl.export_bgen(bgen, tmp, parallel='header_per_shard')
+        hl.index_bgen(tmp + '.bgen')
+        bgen2 = hl.import_bgen(tmp + '.bgen',
+                               entry_fields=['GP'],
+                               sample_file=tmp + '.sample')
+        assert bgen._same(bgen2)
+
+    def test_export_bgen_from_vcf(self):
+        mt = hl.import_vcf(resource('sample.vcf'))
+
+        tmp = new_temp_file()
+        hl.export_bgen(mt, tmp,
+                       gp=hl.or_missing(
+                           hl.is_defined(mt.GT),
+                           hl.map(lambda i: hl.cond(mt.GT.unphased_diploid_gt_index() == i, 1.0, 0.0),
+                                  hl.range(0, hl.triangle(hl.len(mt.alleles))))))
+        hl.index_bgen(tmp + '.bgen')
+        bgen2 = hl.import_bgen(tmp + '.bgen',
+                               entry_fields=['GT'],
+                               sample_file=tmp + '.sample')
+        mt = mt.select_entries('GT').select_rows().select_cols()
+        bgen2 = bgen2.unfilter_entries().select_rows() # drop varid, rsid
+        assert bgen2._same(mt)
+
+
 class GENTests(unittest.TestCase):
     def test_import_gen(self):
         gen = hl.import_gen(resource('example.gen'),
@@ -1138,11 +1255,24 @@ class LocusIntervalTests(unittest.TestCase):
         self.assertTrue(list(t.key.dtype) == ['interval'])
         self.assertTrue(list(t.row.dtype) == ['interval','target'])
 
+        expected = [hl.interval(hl.locus('20', 1), hl.locus('20', 11), True, False),   # 20    0 10      gene0
+                    hl.interval(hl.locus('20', 2), hl.locus('20', 14000001), True, False),  # 20    1          14000000  gene1
+                    hl.interval(hl.locus('20', 5), hl.locus('20', 6), False, False),  # 20    5   5   gene4
+                    hl.interval(hl.locus('20', 17000001), hl.locus('20', 18000001), True, False),  # 20    17000000   18000000  gene2
+                    hl.interval(hl.locus('20', 63025511), hl.locus('20', 63025520), True, True)]  # 20    63025510   63025520  gene3
+
+        self.assertEqual(t.interval.collect(), hl.eval(expected))
+
     def test_import_bed_no_reference_specified(self):
         bed_file = resource('example1.bed')
         t = hl.import_bed(bed_file, reference_genome=None)
         self.assertTrue(t.count() == 3)
         self.assertEqual(t.interval.dtype.point_type, hl.tstruct(contig=hl.tstr, position=hl.tint32))
+
+    def test_import_bed_kwargs_to_import_table(self):
+        bed_file = resource('example2.bed')
+        t = hl.import_bed(bed_file, reference_genome='GRCh37', find_replace=('gene', ''))
+        self.assertFalse('gene1' in t.aggregate(hl.agg.collect_as_set(t.target)))
 
     def test_import_bed_badly_defined_intervals(self):
         bed_file = resource('example4.bed')
@@ -1152,8 +1282,17 @@ class LocusIntervalTests(unittest.TestCase):
         t = hl.import_bed(bed_file, reference_genome=None, skip_invalid_intervals=True)
         self.assertTrue(t.count() == 4)
 
+    def test_pass_through_args(self):
+        interval_file = resource('example3.interval_list')
+        t = hl.import_locus_intervals(interval_file,
+                                      reference_genome='GRCh37',
+                                      skip_invalid_intervals=True,
+                                      filter=r'target_\d\d')
+        assert t.count() == 9
+
 
 class ImportMatrixTableTests(unittest.TestCase):
+    @skip_unless_spark_backend()
     def test_import_matrix_table(self):
         mt = hl.import_matrix_table(doctest_resource('matrix1.tsv'),
                                     row_fields={'Barcode': hl.tstr, 'Tissue': hl.tstr, 'Days': hl.tfloat32})
@@ -1182,6 +1321,16 @@ class ImportMatrixTableTests(unittest.TestCase):
                           no_header=True,
                           row_key=['foo'])
 
+    @skip_unless_spark_backend()
+    def test_import_matrix_table_no_cols(self):
+        fields = {'Chromosome':hl.tstr, 'Position': hl.tint32, 'Ref': hl.tstr, 'Alt': hl.tstr, 'Rand1': hl.tfloat64, 'Rand2': hl.tfloat64}
+        file = resource('sample2_va_nomulti.tsv')
+        mt = hl.import_matrix_table(file, row_fields=fields, row_key=['Chromosome', 'Position'])
+        t = hl.import_table(file, types=fields, key=['Chromosome', 'Position'])
+
+        self.assertEqual(mt.count_cols(), 0)
+        self.assertTrue(t._same(mt.rows()))
+
 
 class ImportTableTests(unittest.TestCase):
     def test_import_table_force_bgz(self):
@@ -1193,3 +1342,7 @@ class ImportTableTests(unittest.TestCase):
         run_command(["cp", uri_path(f), uri_path(f2)])
         t2 = hl.import_table(f2, force_bgz=True, impute=True).key_by('idx')
         self.assertTrue(t._same(t2))
+
+    def test_glob(self):
+        tables = hl.import_table(resource('variantAnnotations.split.*.tsv'))
+        assert tables.count() == 346

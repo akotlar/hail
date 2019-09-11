@@ -3,9 +3,9 @@ import collections
 import datetime
 import os
 import sys
-from flask import Flask, render_template, request, jsonify, abort, url_for
-from flask_cors import CORS
+from flask import Flask, render_template, request, abort, url_for
 from github import Github
+from github.GithubException import RateLimitExceededException
 import random
 import threading
 import humanize
@@ -37,26 +37,21 @@ with open(GITHUB_TOKEN_PATH, 'r') as f:
     token = f.read().strip()
 github = Github(token)
 
-users = [
-    'danking',
-    'tpoterba',
-    'jigold',
-    'jbloom22',
-    'catoverdrive',
-    'patrick-schultz',
-    'chrisvittal',
-    'akotlar',
-    'daniel-goldstein',
-]
+component_users = {
+    'Hail front-end (Py)': ['tpoterba', 'jigold', 'catoverdrive', 'patrick-schultz', 'chrisvittal', 'konradjk', 'johnc1231', 'iitalics'],
+    'Hail middle-end (Scala)': ['danking', 'tpoterba', 'jigold', 'catoverdrive', 'patrick-schultz', 'chrisvittal', 'johnc1231', 'iitalics'],
+    'C++ backend': ['catoverdrive', 'patrick-schultz', 'chrisvittal', 'akotlar', 'iitalics'],
+    'hailctl dataproc': ['tpoterba', 'danking', 'konradjk'],
+    'k8s, services': ['danking', 'jigold', 'akotlar', 'johnc1231'],
+    'Web app (JS)': ['akotlar', 'danking'],
+}
 
 default_repo = 'hail'
 repos = {
     'hail': 'hail-is/hail',
-    'cloudtools': 'Nealelab/cloudtools'
 }
 
 app = Flask('scorecard')
-CORS(app, resources={r'/json/*': {'origins': '*'}})
 
 data = None
 timsetamp = None
@@ -64,34 +59,14 @@ timsetamp = None
 @app.route('/')
 def index():
     user_data, unassigned, urgent_issues, updated = get_users()
-
-    random_user = random.choice(users)
-
+    component_random_user = {c: random.choice(us) for c, us in component_users.items()}
     return render_template('index.html', unassigned=unassigned,
-                           user_data=user_data, urgent_issues=urgent_issues, random_user=random_user, updated=updated)
+                           user_data=user_data, urgent_issues=urgent_issues, component_user=component_random_user, updated=updated)
 
 @app.route('/users/<user>')
 def html_get_user(user):
     user_data, updated = get_user(user)
     return render_template('user.html', user=user, user_data=user_data, updated=updated)
-
-@app.route('/json')
-def json_all_users():
-    user_data, unassigned, urgent_issues, updated = get_users()
-
-    for issue in urgent_issues:
-        issue['timedelta'] = humanize.naturaltime(issue['timedelta'])
-
-    return jsonify(updated=updated, user_data=user_data, unassigned=unassigned, urgent_issues=urgent_issues)
-
-@app.route('/json/users/<user>')
-def json_user(user):
-    user_data, updated = get_user(user)
-    return jsonify(updated=updated, data=user_data)
-
-@app.route('/json/random')
-def json_random_user():
-    return jsonify(random.choice(users))
 
 def get_users():
     cur_data = data
@@ -249,17 +224,20 @@ def update_data():
             'issues': []
         }
 
-    for repo_name, fq_repo in repos.items():
-        repo = github.get_repo(fq_repo)
+    try:
+        for repo_name, fq_repo in repos.items():
+            repo = github.get_repo(fq_repo)
 
-        for pr in repo.get_pulls(state='open'):
-            pr_data = get_pr_data(repo, repo_name, pr)
-            new_data[repo_name]['prs'].append(pr_data)
+            for pr in repo.get_pulls(state='open'):
+                pr_data = get_pr_data(repo, repo_name, pr)
+                new_data[repo_name]['prs'].append(pr_data)
 
-        for issue in repo.get_issues(state='open'):
-            if issue.pull_request is None:
-                issue_data = get_issue_data(repo_name, issue)
-                new_data[repo_name]['issues'].append(issue_data)
+            for issue in repo.get_issues(state='open'):
+                if issue.pull_request is None:
+                    issue_data = get_issue_data(repo_name, issue)
+                    new_data[repo_name]['issues'].append(issue_data)
+    except RateLimitExceededException as e:
+        log.error('Exceeded rate limit: ' + str(e))
 
 
     log.info('updating_data done')

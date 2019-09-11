@@ -830,8 +830,7 @@ class LinearMixedModel(object):
         if not self._fitted:
             raise Exception("null model is not fit. Run 'fit' first.")
 
-        self._scala_model = Env.hail().stats.LinearMixedModel.apply(
-            Env.hc()._jhc,
+        self._scala_model = Env.hail().stats.LinearMixedModel.pyApply(
             self.gamma,
             self._residual_sq,
             _jarray_from_ndarray(self.py),
@@ -875,10 +874,10 @@ class LinearMixedModel(object):
         ...               [ 0.94512946, -0.97320323,  0.98294169,  1.        ]])
         >>> model, p = LinearMixedModel.from_kinship(y, x, k)
         >>> model.fit()
-        >>> model.h_sq  # doctest: +NOTEST
+        >>> model.h_sq  # doctest: +SKIP_OUTPUT_CHECK
         0.2525148830695317
 
-        >>> model.s  # doctest: +NOTEST
+        >>> model.s  # doctest: +SKIP_OUTPUT_CHECK
         array([3.83501295, 0.13540343, 0.02454114, 0.00504248])
 
         Truncate to a rank :math:`r=2` model:
@@ -888,7 +887,7 @@ class LinearMixedModel(object):
         >>> p_r = p[:r, :]
         >>> model_r = LinearMixedModel(p_r @ y, p_r @ x, s_r, y, x)
         >>> model.fit()
-        >>> model.h_sq  # doctest: +NOTEST
+        >>> model.h_sq  # doctest: +SKIP_OUTPUT_CHECK
         0.25193197591429695
 
         Notes
@@ -899,8 +898,7 @@ class LinearMixedModel(object):
         The performance of eigendecomposition depends critically on the
         number of master cores and the NumPy / SciPy configuration, viewable
         with ``np.show_config()``. For Intel machines, we recommend installing
-        the `MKL <https://anaconda.org/anaconda/mkl>`__ package for Anaconda, as
-        is done by `cloudtools <https://github.com/Nealelab/cloudtools>`__.
+        the `MKL <https://anaconda.org/anaconda/mkl>`__ package for Anaconda.
 
         `k` must be positive semi-definite; symmetry is not checked as only the
         lower triangle is used.
@@ -983,7 +981,7 @@ class LinearMixedModel(object):
         ...               [2.0, 4.0, 8.0]])
         >>> model, p = LinearMixedModel.from_random_effects(y, x, z)
         >>> model.fit()
-        >>> model.h_sq  # doctest: +NOTEST
+        >>> model.h_sq  # doctest: +SKIP_OUTPUT_CHECK
         0.38205307244271675
 
         Notes
@@ -1091,7 +1089,7 @@ class LinearMixedModel(object):
 
         if low_rank:
             assert np.all(np.isfinite(s))
-            r = np.searchsorted(-s, -max_condition_number * s[0])
+            r = int(np.searchsorted(-s, -max_condition_number * s[0]))
             if r < m:
                 info(f'from_random_effects: model rank reduced from {m} to {r} '
                      f'due to ill-condition.'

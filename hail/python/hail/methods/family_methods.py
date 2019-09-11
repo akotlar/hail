@@ -62,12 +62,12 @@ def trio_matrix(dataset, pedigree, complete_trios=False) -> MatrixTable:
     """
     mt = dataset
     require_col_key_str(mt, "trio_matrix")
-    
+
     k = mt.col_key.dtype.fields[0]
     samples = mt[k].collect()
 
     pedigree = pedigree.filter_to(samples)
-    trios = pedigree.complete_trios() if complete_trios else pedigree.trios()
+    trios = pedigree.complete_trios() if complete_trios else pedigree.trios
     n_trios = len(trios)
 
     sample_idx = {}
@@ -76,8 +76,8 @@ def trio_matrix(dataset, pedigree, complete_trios=False) -> MatrixTable:
 
     trios = [hl.Struct(
         id=sample_idx[t.s],
-        pat_id=sample_idx[t.pat_id],
-        mat_id=sample_idx[t.mat_id],
+        pat_id=None if t.pat_id is None else sample_idx[t.pat_id],
+        mat_id=None if t.mat_id is None else sample_idx[t.mat_id],
         is_female=t.is_female,
         fam_id=t.fam_id) for t in trios]
     trios_type = hl.dtype('array<struct{id:int,pat_id:int,mat_id:int,is_female:bool,fam_id:str}>')
@@ -270,21 +270,20 @@ def mendel_errors(call, pedigree) -> Tuple[Table, Table, Table, Table]:
 
     table1 = entries.select('fam_id', 'mendel_code')
 
-    fam_counts = (
-        entries
-            .group_by(pat_id=entries.father[ck_name], mat_id=entries.mother[ck_name])
-            .partition_hint(min(entries.n_partitions(), 8))
-            .aggregate(children=hl.len(hl.agg.collect_as_set(entries[ck_name])),
-                       errors=hl.agg.count_where(hl.is_defined(entries.mendel_code)),
-                       snp_errors=hl.agg.count_where(hl.is_snp(entries.alleles[0], entries.alleles[1]) &
-                                                     hl.is_defined(entries.mendel_code)))
-    )
-    table2 = tm.key_cols_by().cols()
+    t2 = tm.annotate_cols(
+        errors=hl.agg.count(),
+        snp_errors=hl.agg.count_where(hl.is_snp(tm.alleles[0], tm.alleles[1])))
+    table2 = t2.key_cols_by().cols()
     table2 = table2.select(pat_id=table2.father[ck_name],
                            mat_id=table2.mother[ck_name],
                            fam_id=table2.fam_id,
-                           **fam_counts[table2.father[ck_name], table2.mother[ck_name]])
-    table2 = table2.key_by('pat_id', 'mat_id').distinct()
+                           errors=table2.errors,
+                           snp_errors=table2.snp_errors)
+    table2 = table2.group_by('pat_id', 'mat_id').aggregate(
+        fam_id=hl.agg.take(table2.fam_id, 1)[0],
+        children=hl.int32(hl.agg.count()),
+        errors=hl.agg.sum(table2.errors),
+        snp_errors=hl.agg.sum(table2.snp_errors))
     table2 = table2.annotate(errors=hl.or_else(table2.errors, hl.int64(0)),
                              snp_errors=hl.or_else(table2.snp_errors, hl.int64(0)))
 
@@ -350,10 +349,10 @@ def transmission_disequilibrium_test(dataset, pedigree) -> Table:
     Examples
     --------
     Compute TDT association statistics and show the first two results:
-    
+
     >>> pedigree = hl.Pedigree.read('data/tdt_trios.fam')
     >>> tdt_table = hl.transmission_disequilibrium_test(tdt_dataset, pedigree)
-    >>> tdt_table.show(2)  # doctest: +NOTEST
+    >>> tdt_table.show(2)  # doctest: +SKIP_OUTPUT_CHECK
     +---------------+------------+-------+-------+----------+----------+
     | locus         | alleles    |     t |     u |   chi_sq |  p_value |
     +---------------+------------+-------+-------+----------+----------+
@@ -366,7 +365,7 @@ def transmission_disequilibrium_test(dataset, pedigree) -> Table:
     Export variants with p-values below 0.001:
 
     >>> tdt_table = tdt_table.filter(tdt_table.p_value < 0.001)
-    >>> tdt_table.export("output/tdt_results.tsv")
+    >>> tdt_table.export(f"output/tdt_results.tsv")
 
     Notes
     -----
@@ -652,6 +651,7 @@ def de_novo(mt: MatrixTable,
 
      - ``DR`` refers to the ratio of the read depth in the proband to the
        combined read depth in the parents.
+     - ``DP`` refers to the read depth (DP field) of the proband.
      - ``AB`` refers to the read allele balance of the proband (number of
        alternate reads divided by total reads).
      - ``AC`` refers to the count of alternate alleles across all individuals
@@ -663,51 +663,50 @@ def de_novo(mt: MatrixTable,
 
     .. code-block:: text
 
-        p > 0.99 && AB > 0.3 && DR > 0.2
-            or
-        p > 0.99 && AB > 0.3 && AC == 1
+        (p > 0.99) AND (AB > 0.3) AND (AC == 1)
+            OR
+        (p > 0.99) AND (AB > 0.3) AND (DR > 0.2)
+            OR
+        (p > 0.5) AND (AB > 0.3) AND (AC < 10) AND (DP > 10)
 
     MEDIUM-quality SNV:
 
     .. code-block:: text
 
-        p > 0.5 && AB > 0.3
-            or
-        p > 0.5 && AB > 0.2 && AC == 1
+        (p > 0.5) AND (AB > 0.3)
+            OR
+        (AC == 1)
 
     LOW-quality SNV:
 
     .. code-block:: text
 
-        p > min_p && AB > 0.2
+       (AB > 0.2)
 
     HIGH-quality indel:
 
     .. code-block:: text
 
-        p > 0.99 && AB > 0.3 && DR > 0.2
-            or
-        p > 0.99 && AB > 0.3 && AC == 1
+        (p > 0.99) AND (AB > 0.3) AND (AC == 1)
 
     MEDIUM-quality indel:
 
     .. code-block:: text
 
-        p > 0.5 && AB > 0.3
-            or
-        p > 0.5 && AB > 0.2 and AC == 1
+        (p > 0.5) AND (AB > 0.3) AND (AC < 10)
 
     LOW-quality indel:
 
     .. code-block:: text
 
-        p > min_p && AB > 0.2
+       (AB > 0.2)
 
     Additionally, de novo candidates are not considered if the proband GQ is
     smaller than the ``min_gq`` parameter, if the proband allele balance is
     lower than the ``min_child_ab`` parameter, if the depth ratio between the
-    proband and parents is smaller than the ``min_depth_ratio`` parameter, or if
-    the allele balance in a parent is above the ``max_parent_ab`` parameter.
+    proband and parents is smaller than the ``min_depth_ratio`` parameter, if
+    the allele balance in a parent is above the ``max_parent_ab`` parameter, or
+    if the posterior probability `p` is smaller than the `min_p` parameter.
 
     Parameters
     ----------
@@ -801,7 +800,7 @@ def de_novo(mt: MatrixTable,
                                 hl.struct(p_de_novo=p_de_novo, confidence='HIGH'))
                           .when((p_de_novo > 0.5) & (kid_ad_ratio > 0.3) & (n_alt_alleles <= 5),
                                 hl.struct(p_de_novo=p_de_novo, confidence='MEDIUM'))
-                          .when((p_de_novo > 0.05) & (kid_ad_ratio > 0.2),
+                          .when(kid_ad_ratio > 0.2,
                                 hl.struct(p_de_novo=p_de_novo, confidence='LOW'))
                           .or_missing())
                     .default(hl.case()
@@ -811,7 +810,7 @@ def de_novo(mt: MatrixTable,
                                    hl.struct(p_de_novo=p_de_novo, confidence='HIGH'))
                              .when((p_de_novo > 0.5) & ((kid_ad_ratio > 0.3) | (n_alt_alleles == 1)),
                                    hl.struct(p_de_novo=p_de_novo, confidence='MEDIUM'))
-                             .when((p_de_novo > 0.05) & (kid_ad_ratio > 0.2),
+                             .when(kid_ad_ratio > 0.2,
                                    hl.struct(p_de_novo=p_de_novo, confidence='LOW'))
                              .or_missing()
                              )
@@ -839,7 +838,7 @@ def de_novo(mt: MatrixTable,
                                 hl.struct(p_de_novo=p_de_novo, confidence='HIGH'))
                           .when((p_de_novo > 0.5) & (kid_ad_ratio > 0.3) & (n_alt_alleles <= 5),
                                 hl.struct(p_de_novo=p_de_novo, confidence='MEDIUM'))
-                          .when((p_de_novo > 0.05) & (kid_ad_ratio > 0.3),
+                          .when(kid_ad_ratio > 0.3,
                                 hl.struct(p_de_novo=p_de_novo, confidence='LOW'))
                           .or_missing())
                     .default(hl.case()
@@ -849,7 +848,7 @@ def de_novo(mt: MatrixTable,
                                    hl.struct(p_de_novo=p_de_novo, confidence='HIGH'))
                              .when((p_de_novo > 0.5) & ((kid_ad_ratio > 0.3) | (n_alt_alleles == 1)),
                                    hl.struct(p_de_novo=p_de_novo, confidence='MEDIUM'))
-                             .when((p_de_novo > 0.05) & (kid_ad_ratio > 0.2),
+                             .when(kid_ad_ratio > 0.2,
                                    hl.struct(p_de_novo=p_de_novo, confidence='LOW'))
                              .or_missing()
                              )

@@ -1,14 +1,14 @@
 package is.hail.expr.types.physical
 
 import is.hail.annotations.{UnsafeUtils, _}
+import is.hail.asm4s._
 import is.hail.check.Gen
 import is.hail.expr.ir.EmitMethodBuilder
 import is.hail.expr.types.virtual.TArray
-import org.json4s.jackson.JsonMethods
-
+import is.hail.utils._
 import scala.reflect.{ClassTag, _}
 
-final case class PArray(elementType: PType, override val required: Boolean = false) extends PContainer {
+final case class PArray(elementType: PType, override val required: Boolean = false) extends PContainer with PStreamable {
   lazy val virtualType: TArray = TArray(elementType.virtualType, required)
 
   val elementByteSize: Long = UnsafeUtils.arrayElementSize(elementType)

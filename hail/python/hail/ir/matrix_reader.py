@@ -1,11 +1,14 @@
 import abc
 import json
 
+import hail as hl
+
+from .utils import make_filter_and_replace
 from ..expr.types import tfloat32, tfloat64
+from ..genetics.reference_genome import reference_genome_type
 from ..typecheck import *
 from ..utils import wrap_to_list
-from ..utils.java import escape_str
-from ..genetics.reference_genome import reference_genome_type
+from ..utils.misc import escape_str
 
 
 class MatrixReader(object):
@@ -19,18 +22,48 @@ class MatrixReader(object):
 
 
 class MatrixNativeReader(MatrixReader):
-    @typecheck_method(path=str)
-    def __init__(self, path):
+    @typecheck_method(path=str,
+                      intervals=nullable(sequenceof(anytype)),
+                      filter_intervals=bool)
+    def __init__(self, path, intervals, filter_intervals):
+        if intervals is not None:
+            t = hl.expr.impute_type(intervals)
+            if not isinstance(t, hl.tarray) and not isinstance(t.element_type, hl.tinterval):
+                raise TypeError("'intervals' must be an array of tintervals")
+            pt = t.element_type.point_type
+            if isinstance(pt, hl.tstruct):
+                self._interval_type = t
+            else:
+                self._interval_type = hl.tarray(hl.tinterval(hl.tstruct(__point=pt)))
+
         self.path = path
+        self.filter_intervals = filter_intervals
+        if intervals is not None and t != self._interval_type:
+            self.intervals = [hl.Interval(hl.Struct(__point=i.start),
+                                          hl.Struct(__point=i.end),
+                                          i.includes_start,
+                                          i.includes_end) for i in intervals]
+        else:
+            self.intervals = intervals
 
     def render(self, r):
         reader = {'name': 'MatrixNativeReader',
                   'path': self.path}
+        if self.intervals is not None:
+            assert self._interval_type is not None
+            reader['options'] = {
+                'name': 'NativeReaderOptions',
+                'intervals': self._interval_type._convert_to_json(self.intervals),
+                'intervalPointType': self._interval_type.element_type.point_type._parsable_string(),
+                'filterIntervals': self.filter_intervals,
+            }
         return escape_str(json.dumps(reader))
 
     def __eq__(self, other):
         return isinstance(other, MatrixNativeReader) and \
-               other.path == self.path
+               other.path == self.path and \
+               other.intervals == self.intervals and \
+               other.filter_intervals == self.filter_intervals
 
 
 class MatrixRangeReader(MatrixReader):
@@ -68,6 +101,8 @@ class MatrixVCFReader(MatrixReader):
                       skip_invalid_loci=bool,
                       force_bgz=bool,
                       force_gz=bool,
+                      filter=nullable(str),
+                      find_replace=nullable(sized_tupleof(str, str)),
                       _partitions_json=nullable(str))
     def __init__(self,
                  path,
@@ -81,6 +116,8 @@ class MatrixVCFReader(MatrixReader):
                  skip_invalid_loci,
                  force_bgz,
                  force_gz,
+                 filter,
+                 find_replace,
                  _partitions_json):
         self.path = wrap_to_list(path)
         self.header_file = header_file
@@ -93,13 +130,15 @@ class MatrixVCFReader(MatrixReader):
         self.skip_invalid_loci = skip_invalid_loci
         self.force_gz = force_gz
         self.force_bgz = force_bgz
+        self.filter = filter
+        self.find_replace = find_replace
         self._partitions_json = _partitions_json
 
     def render(self, r):
         reader = {'name': 'MatrixVCFReader',
                   'files': self.path,
                   'callFields': self.call_fields,
-                  'entryFloatType': self.entry_float_type,
+                  'entryFloatTypeName': self.entry_float_type,
                   'headerFile': self.header_file,
                   'minPartitions': self.min_partitions,
                   'rg': self.reference_genome.name if self.reference_genome else None,
@@ -108,6 +147,7 @@ class MatrixVCFReader(MatrixReader):
                   'skipInvalidLoci': self.skip_invalid_loci,
                   'gzAsBGZ': self.force_bgz,
                   'forceGZ': self.force_gz,
+                  'filterAndReplace': make_filter_and_replace(self.filter, self.find_replace),
                   'partitionsJSON': self._partitions_json}
         return escape_str(json.dumps(reader))
 
@@ -124,6 +164,8 @@ class MatrixVCFReader(MatrixReader):
                other.skip_invalid_loci == self.skip_invalid_loci and \
                other.force_bgz == self.force_bgz and \
                other.force_gz == self.force_gz and \
+               other.filter == self.filter and \
+               other.find_replace == self.find_replace and \
                other._partitions_json == self._partitions_json
 
 
@@ -143,7 +185,7 @@ class MatrixBGENReader(MatrixReader):
 
         from hail.table import Table
         if included_variants is not None:
-            assert(isinstance(included_variants, Table))
+            assert (isinstance(included_variants, Table))
         self.included_variants = included_variants
 
     def render(self, r):
@@ -153,6 +195,7 @@ class MatrixBGENReader(MatrixReader):
                   'indexFileMap': self.index_file_map,
                   'nPartitions': self.n_partitions,
                   'blockSizeInMB': self.block_size,
+                   # FIXME: This has to be wrong. The included_variants IR is not included as a child
                   'includedVariants': r(self.included_variants._tir) if self.included_variants else None
                   }
         return escape_str(json.dumps(reader))
@@ -214,6 +257,7 @@ class MatrixPLINKReader(MatrixReader):
                other.contig_recoding == self.contig_recoding and \
                other.skip_invalid_loci == self.skip_invalid_loci
 
+
 class MatrixGENReader(MatrixReader):
     @typecheck_method(files=sequenceof(str), sample_file=str, chromosome=nullable(str),
                       min_partitions=nullable(int), tolerance=float, rg=nullable(str),
@@ -237,4 +281,4 @@ class MatrixGENReader(MatrixReader):
 
     def __eq__(self, other):
         return isinstance(other, MatrixGENReader) and \
-            self.config == other.config
+               self.config == other.config

@@ -19,14 +19,22 @@ Plot functions in Hail accept data in the form of either Python objects or :clas
 .. autosummary::
     :nosignatures:
 
+    cdf
+    pdf
+    smoothed_pdf
     histogram
     cumulative_histogram
+    histogram2d
     scatter
     qq
     manhattan
 
+.. autofunction:: cdf
+.. autofunction:: pdf
+.. autofunction:: smoothed_pdf
 .. autofunction:: histogram
 .. autofunction:: cumulative_histogram
+.. autofunction:: histogram2d
 .. autofunction:: scatter
 .. autofunction:: qq
 .. autofunction:: manhattan

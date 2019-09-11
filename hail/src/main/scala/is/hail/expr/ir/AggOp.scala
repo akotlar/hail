@@ -14,28 +14,30 @@ case class AggSignature(
   initOpArgs: Option[Seq[Type]],
   seqOpArgs: Seq[Type])
 
+case class AggSignature2(
+  op: AggOp,
+  initOpArgs: Seq[Type],
+  seqOpArgs: Seq[Type],
+  nested: Option[Seq[AggSignature2]])
+
 sealed trait AggOp { }
-final case class CallStats() extends AggOp { }
-final case class Collect() extends AggOp { }
-final case class CollectAsSet() extends AggOp { }
-final case class Count() extends AggOp { }
-final case class Counter() extends AggOp { }
-final case class Downsample() extends AggOp { }
-final case class Fraction() extends AggOp { }
-final case class HardyWeinberg() extends AggOp { }
-final case class Histogram() extends AggOp { }
-final case class Inbreeding() extends AggOp { }
-final case class InfoScore() extends AggOp { }
-final case class LinearRegression() extends AggOp { }
-final case class PearsonCorrelation() extends AggOp { }
-final case class Max() extends AggOp { }
-final case class Min() extends AggOp { }
-final case class Product() extends AggOp { }
-final case class Statistics() extends AggOp { }
-final case class Sum() extends AggOp { }
-final case class Take() extends AggOp { }
-final case class TakeBy() extends AggOp { }
-final case class Group() extends AggOp { }
+final case class ApproxCDF() extends AggOp
+final case class CallStats() extends AggOp
+final case class Collect() extends AggOp
+final case class CollectAsSet() extends AggOp
+final case class Count() extends AggOp
+final case class Downsample() extends AggOp
+final case class LinearRegression() extends AggOp
+final case class Max() extends AggOp
+final case class Min() extends AggOp
+final case class Product() extends AggOp
+final case class Sum() extends AggOp
+final case class Take() extends AggOp
+final case class TakeBy() extends AggOp
+final case class Group() extends AggOp
+final case class AggElements() extends AggOp
+final case class AggElementsLengthCheck() extends AggOp
+final case class PrevNonnull() extends AggOp
 
 // exists === map(p).sum, needs short-circuiting aggs
 // forall === map(p).product, needs short-circuiting aggs
@@ -48,14 +50,19 @@ object AggOp {
   def getType(aggSig: AggSignature): Type = getOption(aggSig).getOrElse(incompatible(aggSig)).out
 
   def getOption(aggSig: AggSignature): Option[CodeAggregator[T] forSome { type T <: RegionValueAggregator }] =
-    getOption(aggSig.op, aggSig.constructorArgs, aggSig.initOpArgs, aggSig.seqOpArgs)
+    getOption((aggSig.op, aggSig.constructorArgs, aggSig.initOpArgs, aggSig.seqOpArgs))
 
   val getOption: ((AggOp, Seq[Type], Option[Seq[Type]], Seq[Type])) => Option[CodeAggregator[T] forSome { type T <: RegionValueAggregator }] = lift {
-    case (Fraction(), Seq(), None, Seq(_: TBoolean)) =>
-      CodeAggregator[RegionValueFractionAggregator](TFloat64(), seqOpArgTypes = Array(classOf[Boolean]))
 
-    case (Statistics(), Seq(), None, Seq(_: TFloat64)) =>
-      CodeAggregator[RegionValueStatisticsAggregator](RegionValueStatisticsAggregator.typ, seqOpArgTypes = Array(classOf[Double]))
+    case (ApproxCDF(), Seq(_: TInt32), None, Seq(elType)) =>
+      val resType = QuantilesAggregator.resultType(elType)
+      val constrArgTypes: Array[Class[_]] = Array(classOf[Int])
+      elType match {
+        case _: TInt32 => CodeAggregator[RegionValueApproxCDFIntAggregator](resType, constrArgTypes = constrArgTypes, seqOpArgTypes = Array(classOf[Int]))
+        case _: TInt64 => CodeAggregator[RegionValueApproxCDFLongAggregator](resType, constrArgTypes = constrArgTypes, seqOpArgTypes = Array(classOf[Long]))
+        case _: TFloat32 => CodeAggregator[RegionValueApproxCDFFloatAggregator](resType, constrArgTypes = constrArgTypes, seqOpArgTypes = Array(classOf[Float]))
+        case _: TFloat64 => CodeAggregator[RegionValueApproxCDFDoubleAggregator](resType, constrArgTypes = constrArgTypes, seqOpArgTypes = Array(classOf[Double]))
+    }
 
     case (Collect(), Seq(), None, Seq(in)) => in match {
       case _: TBoolean => CodeAggregator[RegionValueCollectBooleanAggregator](TArray(in), seqOpArgTypes = Array(classOf[Boolean]))
@@ -66,15 +73,8 @@ object AggOp {
       case _ => CodeAggregator[RegionValueCollectAnnotationAggregator](TArray(in), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
     }
 
-    case (InfoScore(), Seq(), None, Seq(TArray(TFloat64(_), _))) =>
-      CodeAggregator[RegionValueInfoScoreAggregator](RegionValueInfoScoreAggregator.typ, constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
-
     case (Sum(), Seq(), None, Seq(_: TInt64)) => CodeAggregator[RegionValueSumLongAggregator](TInt64(), seqOpArgTypes = Array(classOf[Long]))
     case (Sum(), Seq(), None, Seq(_: TFloat64)) => CodeAggregator[RegionValueSumDoubleAggregator](TFloat64(), seqOpArgTypes = Array(classOf[Double]))
-    case (Sum(), Seq(), None, Seq(TArray(TInt64(_), _))) =>
-      CodeAggregator[RegionValueArraySumLongAggregator](TArray(TInt64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
-    case (Sum(), Seq(), None, Seq(TArray(TFloat64(_), _))) =>
-      CodeAggregator[RegionValueArraySumDoubleAggregator](TArray(TFloat64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
 
     case (CollectAsSet(), Seq(), None, Seq(in)) =>
       in match {
@@ -89,10 +89,6 @@ object AggOp {
     case (Product(), Seq(), None, Seq(_: TInt64)) => CodeAggregator[RegionValueProductLongAggregator](TInt64(), seqOpArgTypes = Array(classOf[Long]))
     case (Product(), Seq(), None, Seq(_: TFloat64)) => CodeAggregator[RegionValueProductDoubleAggregator](TFloat64(), seqOpArgTypes = Array(classOf[Double]))
 
-    case (HardyWeinberg(), Seq(), None, Seq(_: TCall)) => CodeAggregator[RegionValueHardyWeinbergAggregator](
-      RegionValueHardyWeinbergAggregator.typ,
-      seqOpArgTypes = Array(classOf[Int]))
-
     case (Max(), Seq(), None, Seq(_: TBoolean)) => CodeAggregator[RegionValueMaxBooleanAggregator](TBoolean(), seqOpArgTypes = Array(classOf[Boolean]))
     case (Max(), Seq(), None, Seq(_: TInt32)) => CodeAggregator[RegionValueMaxIntAggregator](TInt32(), seqOpArgTypes = Array(classOf[Int]))
     case (Max(), Seq(), None, Seq(_: TInt64)) => CodeAggregator[RegionValueMaxLongAggregator](TInt64(), seqOpArgTypes = Array(classOf[Long]))
@@ -106,15 +102,6 @@ object AggOp {
     case (Min(), Seq(), None, Seq(_: TFloat64)) => CodeAggregator[RegionValueMinDoubleAggregator](TFloat64(), seqOpArgTypes = Array(classOf[Double]))
 
     case (Count(), Seq(), None, Seq()) => CodeAggregator[RegionValueCountAggregator](TInt64(), seqOpArgTypes = Array())
-
-    case (Counter(), Seq(), None, Seq(in)) => in match {
-      case _: TBoolean => CodeAggregator[RegionValueCounterBooleanAggregator](TDict(in, TInt64()), seqOpArgTypes = Array(classOf[Boolean]))
-      case _: TInt32 | _: TCall => CodeAggregator[RegionValueCounterIntAggregator](TDict(in, TInt64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Int]))
-      case _: TInt64 => CodeAggregator[RegionValueCounterLongAggregator](TDict(in, TInt64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
-      case _: TFloat32 => CodeAggregator[RegionValueCounterFloatAggregator](TDict(in, TInt64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Float]))
-      case _: TFloat64 => CodeAggregator[RegionValueCounterDoubleAggregator](TDict(in, TInt64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Double]))
-      case _ => CodeAggregator[RegionValueCounterAnnotationAggregator](TDict(in, TInt64()), constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
-    }
 
     case (Take(), constArgs@Seq(_: TInt32), None, Seq(in)) => in match {
       case _: TBoolean => CodeAggregator[RegionValueTakeBooleanAggregator](TArray(in), constrArgTypes = Array(classOf[Int]), seqOpArgTypes = Array(classOf[Boolean]))
@@ -173,12 +160,6 @@ object AggOp {
         case (_, _) => tbCodeAgg[RegionValueTakeByAnnotationAnnotationAggregator](classOf[Long], classOf[Long])
       }
 
-    case (Histogram(), constArgs@Seq(_: TFloat64, _: TFloat64, _: TInt32), None, Seq(_: TFloat64)) =>
-      CodeAggregator[RegionValueHistogramAggregator](
-        RegionValueHistogramAggregator.typ,
-        constrArgTypes = Array(classOf[Double], classOf[Double], classOf[Int]),
-        seqOpArgTypes = Array(classOf[Double]))
-
     case (Downsample(), constArgs@Seq(_: TInt32), None, seqOpArgs@Seq(_: TFloat64, _: TFloat64, _: TArray)) =>
       CodeAggregator[RegionValueDownsampleAggregator](
         RegionValueDownsampleAggregator.typ,
@@ -191,22 +172,13 @@ object AggOp {
         initOpArgTypes = Some(Array(classOf[Int])),
         seqOpArgTypes = Array(classOf[Int]))
 
-    case (Inbreeding(), Seq(), None, seqOpArgs@Seq(_: TCall, _: TFloat64)) =>
-      CodeAggregator[RegionValueInbreedingAggregator](
-        RegionValueInbreedingAggregator.typ,
-        seqOpArgTypes = Array(classOf[Int], classOf[Double]))
-
     case (LinearRegression(), constArgs@Seq(_: TInt32, _: TInt32), None, seqOpArgs@(Seq(_: TFloat64, TArray(_: TFloat64, _)))) =>
       CodeAggregator[RegionValueLinearRegressionAggregator](
         RegionValueLinearRegressionAggregator.typ,
         constrArgTypes = Array(classOf[Int], classOf[Int], classOf[Type]),
         seqOpArgTypes = Array(classOf[Double], classOf[Long]))
 
-    case (PearsonCorrelation(), Seq(), None, seqOpArgs@Seq(_: TFloat64, _: TFloat64)) =>
-      CodeAggregator[RegionValuePearsonCorrelationAggregator](
-        TFloat64(),
-        seqOpArgTypes = Array(classOf[Double], classOf[Double])
-      )
+    case (PrevNonnull(), Seq(), None, Seq(in)) => CodeAggregator[RegionValuePrevNonnullAnnotationAggregator2](in, constrArgTypes = Array(classOf[Type]), seqOpArgTypes = Array(classOf[Long]))
   }
 
   private def incompatible(aggSig: AggSignature): Nothing = {
@@ -216,8 +188,7 @@ object AggOp {
   }
 
   val fromString: PartialFunction[String, AggOp] = {
-    case "fraction" | "Fraction" => Fraction()
-    case "stats" | "Statistics" => Statistics()
+    case "approxCDF" | "ApproxCDF" => ApproxCDF()
     case "collect" | "Collect" => Collect()
     case "collectAsSet" | "CollectAsSet" => CollectAsSet()
     case "sum" | "Sum" => Sum()
@@ -225,16 +196,11 @@ object AggOp {
     case "max" | "Max" => Max()
     case "min" | "Min" => Min()
     case "count" | "Count" => Count()
-    case "counter" | "Counter" => Counter()
     case "take" | "Take" => Take()
     case "takeBy" | "TakeBy" => TakeBy()
-    case "hist" | "Histogram" => Histogram()
-    case "infoScore" | "InfoScore" => InfoScore()
     case "callStats" | "CallStats" => CallStats()
-    case "inbreeding" | "Inbreeding" => Inbreeding()
-    case "hardyWeinberg" | "HardyWeinberg" => HardyWeinberg()
     case "linreg" | "LinearRegression" => LinearRegression()
-    case "corr" | "PearsonCorrelation" => PearsonCorrelation()
     case "downsample" | "Downsample" => Downsample()
+    case "prevnonnull" | "PrevNonnull" => PrevNonnull()
   }
 }

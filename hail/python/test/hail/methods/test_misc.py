@@ -61,6 +61,7 @@ class Tests(unittest.TestCase):
         self.assertTrue(ds.annotate_rows(target=interval_list2[ds.locus].target).rows()
                         ._same(ds.annotate_rows(target=bed2[ds.locus].target).rows()))
 
+    @skip_unless_spark_backend()
     def test_maximal_independent_set(self):
         # prefer to remove nodes with higher index
         t = hl.utils.range_table(10)
@@ -76,6 +77,7 @@ class Tests(unittest.TestCase):
         self.assertRaises(ValueError, lambda: hl.maximal_independent_set(graph.i, hl.utils.range_table(10).idx, True))
         self.assertRaises(ValueError, lambda: hl.maximal_independent_set(hl.literal(1), hl.literal(2), True))
 
+    @skip_unless_spark_backend()
     def test_maximal_independent_set2(self):
         edges = [(0, 4), (0, 1), (0, 2), (1, 5), (1, 3), (2, 3), (2, 6),
                  (3, 7), (4, 5), (4, 6), (5, 7), (6, 7)]
@@ -91,6 +93,7 @@ class Tests(unittest.TestCase):
         non_maximal_indep_sets = [{0, 7}, {6, 1}]
         self.assertTrue(mis in non_maximal_indep_sets or mis in maximal_indep_sets)
 
+    @skip_unless_spark_backend()
     def test_maximal_independent_set3(self):
         is_case = {"A", "C", "E", "G", "H"}
         edges = [("A", "B"), ("C", "D"), ("E", "F"), ("G", "H")]
@@ -112,6 +115,7 @@ class Tests(unittest.TestCase):
         self.assertTrue(mis.all(mis.node.is_case))
         self.assertTrue(set([row.id for row in mis.select(mis.node.id).collect()]) in expected_sets)
 
+    @skip_unless_spark_backend()
     def test_maximal_independent_set_types(self):
         ht = hl.utils.range_table(10)
         ht = ht.annotate(i=hl.struct(a='1', b=hl.rand_norm(0, 1)),
@@ -208,3 +212,11 @@ class Tests(unittest.TestCase):
         mt = hl.import_vcf(resource('sample2.vcf'))  # has multiallelics
         with self.assertRaises(hl.utils.FatalError):
             hl.methods.misc.require_biallelic(mt, '')._force_count_rows()
+
+    def test_lambda_gc(self):
+        N = 5000000
+        ht = hl.utils.range_table(N).annotate(x = hl.scan.count() / N, x2 = (hl.scan.count() / N) ** 1.5)
+        lgc = hl.lambda_gc(ht.x)
+        lgc2 = hl.lambda_gc(ht.x2)
+        self.assertAlmostEqual(lgc, 1, places=1)  # approximate, 1 place is safe
+        self.assertAlmostEqual(lgc2, 1.89, places=1)  # approximate, 1 place is safe

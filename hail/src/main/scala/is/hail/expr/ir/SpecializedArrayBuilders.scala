@@ -94,7 +94,7 @@ sealed abstract class MissingArrayBuilder(initialCapacity: Int) {
   def ensureCapacity(n: Int): Unit
 
   def setMissing(i: Int, m: Boolean): Unit = {
-    require(i >= 0 && i < size)
+    require(i >= 0 && i < size, i)
     missing(i) = m
   }
 
@@ -406,4 +406,46 @@ class BooleanArrayBuilder(initialCapacity: Int) extends MissingArrayBuilder(init
       i += 1
     }
   }
+}
+
+class ByteArrayArrayBuilder(initialCapacity: Int) {
+
+  var size_ : Int = 0
+  private var b: Array[Array[Byte]] = new Array[Array[Byte]](initialCapacity)
+
+  def size: Int = size_
+
+  def setSize(n: Int) {
+    require(n >= 0 && n <= size)
+    size_ = n
+  }
+
+  def apply(i: Int): Array[Byte] = {
+    require(i >= 0 && i < size)
+    b(i)
+  }
+
+  def ensureCapacity(n: Int): Unit = {
+    if (b.length < n) {
+      val newCapacity = (b.length * 2).max(n)
+      val newb = new Array[Array[Byte]](newCapacity)
+      Array.copy(b, 0, newb, 0, size_)
+      b = newb
+    }
+  }
+
+  def add(x: Array[Byte]): Unit = {
+    ensureCapacity(size_ + 1)
+    b(size_) = x
+    size_ += 1
+  }
+
+  def update(i: Int, x: Array[Byte]): Unit = {
+    require(i >= 0 && i < size)
+    b(i) = x
+  }
+
+  def clear() {  size_ = 0 }
+
+  def result(): Array[Array[Byte]] = b.slice(0, size_)
 }

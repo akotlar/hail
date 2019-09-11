@@ -1,26 +1,62 @@
 package is.hail.io.index
 
+import java.io.OutputStream
+
 import is.hail.annotations.{Annotation, Region, RegionValueBuilder}
-import is.hail.expr.types._
+import is.hail.expr.types.physical.PType
 import is.hail.expr.types.virtual.Type
-import is.hail.io.CodecSpec
+import is.hail.io.fs.FS
+import is.hail.io._
+import is.hail.rvd.AbstractRVDSpec
 import is.hail.utils._
 import is.hail.utils.richUtils.ByteTrackingOutputStream
-import org.apache.hadoop.conf.Configuration
 import org.json4s.Formats
 import org.json4s.jackson.Serialization
+
+trait AbstractIndexMetadata {
+  def fileVersion: Int
+
+  def branchingFactor: Int
+
+  def height: Int
+
+  def keyType: Type
+
+  def annotationType: Type
+
+  def nKeys: Long
+
+  def indexPath: String
+
+  def rootOffset: Long
+
+  def attributes: Map[String, Any]
+
+  def leafSpec: CodecSpec2
+
+  def intSpec: CodecSpec2
+}
 
 case class IndexMetadata(
   fileVersion: Int,
   branchingFactor: Int,
   height: Int,
-  keyType: String,
-  annotationType: String,
+  keyType: Type,
+  annotationType: Type,
   nKeys: Long,
   indexPath: String,
   rootOffset: Long,
   attributes: Map[String, Any]
-)
+) extends AbstractIndexMetadata {
+  val baseSpec = LEB128BufferSpec(
+      BlockingBufferSpec(32 * 1024,
+        LZ4BlockBufferSpec(32 * 1024,
+          new StreamBlockBufferSpec)))
+
+  def leafSpec: CodecSpec2 = PackCodecSpec2(LeafNodeBuilder.legacyTyp(keyType.physicalType, annotationType.physicalType), baseSpec)
+
+  def intSpec: CodecSpec2 = PackCodecSpec2(InternalNodeBuilder.legacyTyp(keyType.physicalType, annotationType.physicalType), baseSpec)
+}
 
 case class IndexNodeInfo(
   indexFileOffset: Long,
@@ -32,30 +68,62 @@ case class IndexNodeInfo(
 
 object IndexWriter {
   val version: SemanticVersion = SemanticVersion(1, 0, 0)
+
+  def builder(
+    keyType: PType,
+    annotationType: PType,
+    branchingFactor: Int = 4096,
+    attributes: Map[String, Any] = Map.empty[String, Any]
+  ): (FS, String) => IndexWriter = {
+    val leafPType = LeafNodeBuilder.typ(keyType, annotationType)
+    val makeLeafEnc = CodecSpec.default.makeCodecSpec2(leafPType).buildEncoder(leafPType)
+
+    val intPType = InternalNodeBuilder.typ(keyType, annotationType)
+    val makeIntEnc = CodecSpec.default.makeCodecSpec2(intPType).buildEncoder(intPType)
+
+
+    { (fs: FS, path: String) =>
+      new IndexWriter(
+        fs,
+        path,
+        keyType,
+        annotationType,
+        makeLeafEnc,
+        makeIntEnc,
+        leafPType,
+        intPType,
+        branchingFactor,
+        attributes)
+    }
+  }
 }
 
+
 class IndexWriter(
-  hConf: Configuration,
+  fs: FS,
   path: String,
-  keyType: Type,
-  annotationType: Type,
+  keyType: PType,
+  annotationType: PType,
+  makeLeafEncoder: (OutputStream) => Encoder,
+  makeInternalEncoder: (OutputStream) => Encoder,
+  leafPType: PType,
+  intPType: PType,
   branchingFactor: Int = 4096,
   attributes: Map[String, Any] = Map.empty[String, Any]) extends AutoCloseable {
   require(branchingFactor > 1)
 
   private var elementIdx = 0L
-  private val region = new Region()
+  private val region = Region()
   private val rvb = new RegionValueBuilder(region)
 
   private val leafNodeBuilder = new LeafNodeBuilder(keyType, annotationType, 0L)
   private val internalNodeBuilders = new ArrayBuilder[InternalNodeBuilder]()
   internalNodeBuilders += new InternalNodeBuilder(keyType, annotationType)
 
-  private val trackedOS = new ByteTrackingOutputStream(hConf.unsafeWriter(path + "/index"))
+  private val trackedOS = new ByteTrackingOutputStream(fs.unsafeWriter(path + "/index"))
 
-  private val codecSpec = CodecSpec.default
-  private val leafEncoder = codecSpec.buildEncoder(leafNodeBuilder.typ.physicalType)(trackedOS)
-  private val internalEncoder = codecSpec.buildEncoder(InternalNodeBuilder.typ(keyType, annotationType).physicalType)(trackedOS)
+  private val leafEncoder = makeLeafEncoder(trackedOS)
+  private val internalEncoder = makeInternalEncoder(trackedOS)
 
   private def height: Int = internalNodeBuilders.length + 1 // have one leaf node layer
 
@@ -143,18 +211,18 @@ class IndexWriter(
   }
 
   private def writeMetadata(rootOffset: Long) = {
-    hConf.writeTextFile(path + "/metadata.json.gz") { out =>
+    fs.writeTextFile(path + "/metadata.json.gz") { out =>
       val metadata = IndexMetadata(
         IndexWriter.version.rep,
         branchingFactor,
-        height, 
-        keyType.parsableString(),
-        annotationType.parsableString(),
+        height,
+        keyType.virtualType,
+        annotationType.virtualType,
         elementIdx,
         "index",
         rootOffset,
         attributes)
-      implicit val formats: Formats = defaultJSONFormats
+      implicit val formats: Formats = AbstractRVDSpec.formats
       Serialization.write(metadata, out)
     }
   }

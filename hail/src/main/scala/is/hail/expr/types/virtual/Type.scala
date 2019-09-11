@@ -2,6 +2,7 @@ package is.hail.expr.types.virtual
 
 import is.hail.annotations._
 import is.hail.check.{Arbitrary, Gen}
+import is.hail.expr.ir.IRParser
 import is.hail.expr.types._
 import is.hail.expr.types.physical.PType
 import is.hail.expr.{JSONAnnotationImpex, SparkAnnotationImpex}
@@ -9,9 +10,14 @@ import is.hail.utils
 import is.hail.utils._
 import is.hail.variant.ReferenceGenome
 import org.apache.spark.sql.types.DataType
-import org.json4s.JValue
+import org.json4s.JsonAST.JString
+import org.json4s.{CustomSerializer, JValue}
 
 import scala.reflect.ClassTag
+
+class TypeSerializer extends CustomSerializer[Type](format => (
+  { case JString(s) => IRParser.parseType(s) },
+  { case t: Type => JString(t.parsableString()) }))
 
 object Type {
   def genScalar(required: Boolean): Gen[Type] =
@@ -28,10 +34,6 @@ object Type {
     val others = Array(TCall(required))
     Gen.oneOfSeq(rgDependents ++ others)
   }
-
-  val optionalComplex: Gen[Type] = genComplexType(false)
-
-  val requiredComplex: Gen[Type] = genComplexType(true)
 
   def genFields(required: Boolean, genFieldType: Gen[Type]): Gen[Array[Field]] = {
     Gen.buildableOf[Array](
@@ -56,7 +58,7 @@ object Type {
 
   def preGenTuple(required: Boolean, genFieldType: Gen[Type]): Gen[TTuple] = {
     for (fields <- genFields(required, genFieldType)) yield {
-      val t = TTuple(fields.map(_.typ))
+      val t = TTuple(fields.map(_.typ): _*)
       if (required)
         (+t).asInstanceOf[TTuple]
       else
@@ -138,6 +140,10 @@ abstract class Type extends BaseType with Serializable {
     this.isOfType(concrete)
   }
 
+  def _isCanonical: Boolean = true
+
+  final def isCanonical: Boolean = _isCanonical && children.forall(_.isCanonical)
+
   def isBound: Boolean = children.forall(_.isBound)
 
   def subst(): Type = this.setRequired(false)
@@ -207,7 +213,7 @@ abstract class Type extends BaseType with Serializable {
 
   def canCompare(other: Type): Boolean = this == other
 
-  val ordering: ExtendedOrdering
+  def ordering: ExtendedOrdering
 
   def jsonReader: JSONReader[Annotation] = new JSONReader[Annotation] {
     def fromJSON(a: JValue): Annotation = JSONAnnotationImpex.importAnnotation(a, self)
@@ -250,6 +256,7 @@ abstract class Type extends BaseType with Serializable {
       case t: TInterval => t.copy(required = required)
       case t: TStruct => t.copy(required = required)
       case t: TTuple => t.copy(required = required)
+      case t: TNDArray => t.copy(required = required)
     }
   }
 
@@ -276,8 +283,40 @@ abstract class Type extends BaseType with Serializable {
       case t2: TArray => t.isInstanceOf[TArray] && t.asInstanceOf[TArray].elementType.isOfType(t2.elementType)
       case t2: TSet => t.isInstanceOf[TSet] && t.asInstanceOf[TSet].elementType.isOfType(t2.elementType)
       case t2: TDict => t.isInstanceOf[TDict] && t.asInstanceOf[TDict].keyType.isOfType(t2.keyType) && t.asInstanceOf[TDict].valueType.isOfType(t2.valueType)
+      case t2: TNDArray =>
+        t.isInstanceOf[TNDArray] &&
+        t.asInstanceOf[TNDArray].elementType.isOfType(t2.elementType) &&
+        t.asInstanceOf[TNDArray].nDims == t2.nDims
       case TVoid => t == TVoid
     }
+  }
+
+  def canCastTo(t: Type): Boolean = this match {
+    case TInterval(tt1, required) => t match {
+      case TInterval(tt2, `required`) => tt1.canCastTo(tt2)
+      case _ => false
+    }
+    case TStruct(f1, required) => t match {
+      case TStruct(f2, `required`) => f1.size == f2.size && f1.indices.forall(i => f1(i).typ.canCastTo(f2(i).typ))
+      case _ => false
+    }
+    case TTuple(f1, required) => t match {
+      case TTuple(f2, `required`) => f1.size == f2.size && f1.indices.forall(i => f1(i).typ.canCastTo(f2(i).typ))
+      case _ => false
+    }
+    case TArray(t1, required) => t match {
+      case TArray(t2, `required`) => t1.canCastTo(t2)
+      case _ => false
+    }
+    case TSet(t1, required) => t match {
+      case TSet(t2, `required`) => t1.canCastTo(t2)
+      case _ => false
+    }
+    case TDict(k1, v1, required) => t match {
+      case TDict(k2, v2, `required`) => k1.canCastTo(k2) && v1.canCastTo(v2)
+      case _ => false
+    }
+    case _ => this == t
   }
 
   def deepOptional(): Type =
@@ -288,7 +327,7 @@ abstract class Type extends BaseType with Serializable {
       case t: TStruct =>
         TStruct(t.fields.map(f => Field(f.name, f.typ.deepOptional(), f.index)))
       case t: TTuple =>
-        TTuple(t.types.map(_.deepOptional()))
+        TTuple(t._types.map(fd => fd.copy(typ = fd.typ.deepOptional())))
       case t =>
         t.setRequired(false)
     }

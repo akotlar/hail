@@ -1,15 +1,17 @@
 package is.hail.expr.ir
 
-import is.hail.SparkSuite
+import is.hail.{ExecStrategy, HailSuite}
 import is.hail.TestUtils.assertEvalsTo
 import is.hail.expr.ir.TestUtils.IRAggCount
-import is.hail.expr.types.virtual.{TInt32, TStruct}
+import is.hail.expr.types.virtual._
 import is.hail.table.{Ascending, SortField}
-import is.hail.utils.FastIndexedSeq
+import is.hail.utils.{FastIndexedSeq, FastSeq}
 import org.apache.spark.sql.Row
 import org.testng.annotations.Test
 
-class SimplifySuite extends SparkSuite {
+class SimplifySuite extends HailSuite {
+  implicit val execStrats = ExecStrategy.interpretOnly
+
   @Test def testTableMultiWayZipJoinGlobalsRewrite() {
     hc
     val tmwzj = TableGetGlobals(TableMultiWayZipJoin(
@@ -54,5 +56,48 @@ class SimplifySuite extends SparkSuite {
 
     val ir2 = SelectFields(InsertFields(base, FastIndexedSeq("3" -> I32(1)), None), FastIndexedSeq("3", "1"))
     assert(Simplify(ir2) == InsertFields(SelectFields(base, FastIndexedSeq("1")), FastIndexedSeq("3" -> I32(1)), Some(FastIndexedSeq("3", "1"))))
+  }
+
+  @Test def testBlockMatrixRewriteRules() {
+    val bmir = ValueToBlockMatrix(MakeArray(FastIndexedSeq(F64(1), F64(2), F64(3), F64(4)), TArray(TFloat64())),
+      FastIndexedSeq(2, 2), 10)
+    val identityBroadcast = BlockMatrixBroadcast(bmir, FastIndexedSeq(0, 1), FastIndexedSeq(2, 2), 10)
+
+    assert(Simplify(identityBroadcast) == bmir)
+  }
+
+  @Test def testContainsRewrites() {
+    assertEvalsTo(invoke("contains", TBoolean(), Literal(TArray(TString()), FastIndexedSeq("a")), In(0, TString())),
+      FastIndexedSeq("a" -> TString()),
+      true)
+
+    assertEvalsTo(invoke("contains", TBoolean(), ToSet(In(0, TArray(TString()))), Str("a")),
+      FastIndexedSeq(FastIndexedSeq("a") -> TArray(TString())),
+      true)
+
+
+    assertEvalsTo(invoke("contains", TBoolean(), ToArray(In(0, TSet(TString()))), Str("a")),
+      FastIndexedSeq(Set("a") -> TSet(TString())),
+      true)
+  }
+
+  @Test def testTableCountExplodeSetRewrite() {
+    var ir: TableIR = TableRange(1, 1)
+    ir = TableMapRows(ir, InsertFields(Ref("row", ir.typ.rowType), Seq("foo" -> Literal(TSet(TInt32()), Set(1)))))
+    ir = TableExplode(ir, FastIndexedSeq("foo"))
+    assertEvalsTo(TableCount(ir), 1L)
+  }
+
+  @Test def testNestedInsertsSimplify() {
+    val r = Ref("row", TStruct(("x", TInt32())))
+    val r2 = Ref("row2", TStruct(("x", TInt32()), ("y", TFloat64())))
+
+    val ir1 = Let("row2", InsertFields(r, FastSeq(("y", F64(0.0)))), InsertFields(r2, FastSeq(("z", GetField(r2, "x").toD))))
+    val ir2 = Let("row2", InsertFields(r, FastSeq(("y", F64(0.0)))), InsertFields(r2, FastSeq(("z", GetField(r2, "y").toI))))
+    val ir3 = Let("row2", InsertFields(r, FastSeq(("y", F64(0.0)))), InsertFields(Ref("something_else", TStruct()), FastSeq(("z", GetField(r2, "y").toI))))
+
+    assert(Simplify(ir1) == InsertFields(r, FastSeq(("y", F64(0)), ("z", GetField(r, "x").toD))))
+    assert(Simplify(ir2) == ir2)
+    assert(Simplify(ir3) == ir3)
   }
 }

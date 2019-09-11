@@ -1,3 +1,2 @@
-/deployment.yaml
-/spark-hail-pod.yaml
-/hail-jupyter-pod.yaml
+/deployment.yaml.out
+/jupyter_notebook_config.py

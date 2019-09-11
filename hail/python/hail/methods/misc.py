@@ -92,6 +92,9 @@ def maximal_independent_set(i, j, keep=True, tie_breaker=None, keyed=True) -> Ta
     When multiple nodes have the same degree, this algorithm will order the
     nodes according to ``tie_breaker`` and remove the *largest* node.
 
+    If `keyed` is ``False``, then a node may appear twice in the resulting
+    table.
+
     Parameters
     ----------
     i : :class:`.Expression`
@@ -146,21 +149,19 @@ def maximal_independent_set(i, j, keep=True, tie_breaker=None, keyed=True) -> Ta
     edges.write(edges_path)
     edges = hl.read_table(edges_path)
 
-    mis_nodes = Env.hail().utils.Graph.maximalIndependentSet(
-        edges._jt.collect(),
+    mis_nodes = construct_expr(JavaIR(Env.hail().utils.Graph.pyMaximalIndependentSet(
+        Env.spark_backend('maximal_independent_set')._to_java_ir(edges.collect(_localize=False)._ir),
         node_t._parsable_string(),
-        joption(tie_breaker_str))
+        joption(tie_breaker_str))),
+                               hl.tset(node_t))
 
     nodes = edges.select(node = [edges.__i, edges.__j])
     nodes = nodes.explode(nodes.node)
-    # avoid serializing `mis_nodes` from java to python and back to java
-    nodes = Table._from_java(
-        nodes._jt.annotateGlobal(
-            mis_nodes, hl.tset(node_t)._parsable_string(), 'mis_nodes'))
+    nodes = nodes.annotate_globals(mis_nodes=mis_nodes)
     nodes = nodes.filter(nodes.mis_nodes.contains(nodes.node), keep)
     nodes = nodes.select_globals()
     if keyed:
-        return nodes.key_by('node')
+        return nodes.key_by('node').distinct()
     return nodes
 
 
@@ -360,43 +361,33 @@ def filter_intervals(ds, intervals, keep=True) -> Union[Table, MatrixTable]:
 
     if point_type == k_type[0]:
         needs_wrapper = True
-        point_type = hl.tstruct(foo=point_type)
+        k_name = k_type.fields[0]
+        point_type = hl.tstruct(**{k_name: k_type[k_name]})
     elif isinstance(point_type, tstruct) and is_struct_prefix(point_type, k_type):
         needs_wrapper = False
     else:
-        raise TypeError("The point type is incompatible with key type of the dataset ('{}', '{}')".format(repr(point_type), repr(k_type)))
+        raise TypeError(
+            "The point type is incompatible with key type of the dataset ('{}', '{}')".format(repr(point_type),
+                                                                                              repr(k_type)))
 
     def wrap_input(interval):
         if interval is None:
             raise TypeError("'filter_intervals' does not allow missing values in 'intervals'.")
         elif needs_wrapper:
-            return Interval(Struct(foo=interval.start),
-                            Struct(foo=interval.end),
+            return Interval(Struct(**{k_name: interval.start}),
+                            Struct(**{k_name: interval.end}),
                             interval.includes_start,
                             interval.includes_end)
         else:
             return interval
 
-    intervals_type = intervals.dtype
     intervals = hl.eval(intervals)
-    intervals = hl.tarray(hl.tinterval(point_type))._convert_to_json([wrap_input(i) for i in intervals])
+    intervals = [wrap_input(i) for i in intervals]
 
     if isinstance(ds, MatrixTable):
-        config = {
-            'name': 'MatrixFilterIntervals',
-            'keyType': point_type._parsable_string(),
-            'intervals': intervals,
-            'keep': keep
-        }
-        return MatrixTable(MatrixToMatrixApply(ds._mir, config))
+        return MatrixTable(MatrixFilterIntervals(ds._mir, intervals, point_type, keep))
     else:
-        config = {
-            'name': 'TableFilterIntervals',
-            'keyType': point_type._parsable_string(),
-            'intervals': intervals,
-            'keep': keep
-        }
-        return Table(TableToTableApply(ds._tir, config))
+        return Table(TableFilterIntervals(ds._tir, intervals, point_type, keep))
 
 
 @typecheck(mt=MatrixTable, bp_window_size=int)
