@@ -115,12 +115,12 @@ class Header extends PureComponent<WithRouterProps> {
             */}
           </Fragment>
         ) : (
-          <Link href="/login" prefetch>
-            <a className={`${bStyle} ${pathname === '/login' ? 'active' : ''}`}>
-              Login
+            <Link href="/login">
+              <a className={`${bStyle} ${pathname === '/login' ? 'active' : ''}`}>
+                Login
             </a>
-          </Link>
-        )}
+            </Link>
+          )}
       </span>
     );
   }
