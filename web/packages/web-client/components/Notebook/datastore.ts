@@ -184,7 +184,7 @@ export const createNotebook = async () => {
     },
     method: 'POST'
   })
-    .then(d => d.json())
+    .then(d => d && d.json())
     .then((notebook: notebookType) => {
       notebooks[notebook.pod_name] = notebook;
       alive = getAlive(notebooks);

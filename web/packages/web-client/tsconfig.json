@@ -3,7 +3,11 @@
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "jsx": "preserve",
-    "lib": ["dom", "es2017", "es2018"],
+    "lib": [
+      "dom",
+      "es2017",
+      "es2018"
+    ],
     "target": "es2018",
     "module": "esnext",
     "moduleResolution": "node",
@@ -24,7 +28,21 @@
     "strict": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
-    "typeRoots": ["./node_modules/@types/", "./@types/"]
+    "typeRoots": [
+      "./node_modules/@types/",
+      "./@types/"
+    ],
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
   },
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts"
+  ],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ]
 }

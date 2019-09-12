@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-const withTypescript = require('@zeit/next-typescript');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 const withPurgeCss = require('next-purgecss');
 const withCss = require('@zeit/next-css');
@@ -21,11 +20,9 @@ const publicRuntimeConfig = {
   },
   SCORECARD: {
     WEB_URL: process.env.SCORECARD_WEB_URL,
-    SERVER_URL:
-      process.env.SCORECARD_SERVER_URL || process.env.SCORECARD_WEB_URL,
-    USERS: process.env.SCORECARD_USERS
-      ? process.env.SCORECARD_USERS.split(',')
-      : []
+    SERVER_URL: process.env.SCORECARD_SERVER_URL || process.env.SCORECARD_WEB_URL,
+    USERS: process.env.SCORECARD_USERS ?
+      process.env.SCORECARD_USERS.split(',') : []
   },
   NOTEBOOK: {
     URL: process.env.NOTEBOOK_URL,
@@ -57,6 +54,4 @@ const nextConfig = {
   publicRuntimeConfig
 };
 
-module.exports = withSize(
-  withTypescript(withSass(withCss(withPurgeCss(nextConfig))))
-);
+module.exports = withSize(withSass(withCss(withPurgeCss(nextConfig))));

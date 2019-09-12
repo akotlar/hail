@@ -1,5 +1,5 @@
 {
-  "presets": ["next/babel", "@zeit/next-typescript/babel"],
+  "presets": ["next/babel"],
   // https://github.com/zeit/next.js/blob/master/examples/with-absolute-imports/.babelrc
   "plugins": [
     [

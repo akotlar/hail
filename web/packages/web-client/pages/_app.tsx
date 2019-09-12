@@ -1,4 +1,4 @@
-import App, { Container } from 'next/app';
+import App from 'next/app';
 import Header from '../components/Header';
 import { initialize, isAuthenticated, initStateSSR } from '../libs/auth';
 import Router from 'next/router';
@@ -15,7 +15,7 @@ import {
 // TODO: set some kind of protected property on routes, instead of
 // blacklisting here
 const protectedRoute: any = {
-  '/notebook': true
+  // '/notebook': true
 };
 
 const isServer = typeof window === 'undefined';
@@ -114,24 +114,22 @@ export default class MyApp extends App<props> {
     const { Component, pageProps } = this.props;
 
     return (
-      <Container>
-        <span id="theme-site" className={this.state.isDark ? 'dark' : ''}>
-          <Header />
-          <span id="main">
-            <Component {...pageProps} />
-          </span>
-
-          <span id="footer">
-            <i
-              className="material-icons"
-              style={{ cursor: 'pointer', fontSize: '1rem' }}
-              onClick={this.onDarkToggle}
-            >
-              wb_sunny
-            </i>
-          </span>
+      <span id="theme-site" className={this.state.isDark ? 'dark' : ''}>
+        <Header />
+        <span id="main">
+          <Component {...pageProps} />
         </span>
-      </Container>
+
+        <span id="footer">
+          <i
+            className="material-icons"
+            style={{ cursor: 'pointer', fontSize: '1rem' }}
+            onClick={this.onDarkToggle}
+          >
+            wb_sunny
+            </i>
+        </span>
+      </span>
     );
   }
 }

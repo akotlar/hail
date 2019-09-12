@@ -8,6 +8,7 @@ import auth, {
 } from '../libs/auth';
 import './Header/header.scss';
 import { withRouter } from 'next/router';
+import { WithRouterProps } from 'next/dist/client/with-router';
 
 const bStyle = 'link-button';
 
@@ -17,7 +18,7 @@ declare type headerState = {
   // showProfileControls: boolean,
   isLoggedIn: boolean;
 };
-class Header extends PureComponent {
+class Header extends PureComponent<WithRouterProps> {
   state: headerState = {
     // showProfileControls: false,
     isLoggedIn: false
@@ -74,24 +75,17 @@ class Header extends PureComponent {
             <b>/</b>
           </a>
         </Link>
-        <Link href="/notebook" prefetch>
+        <Link href="/share">
           <a
-            className={`${bStyle} ${pathname === '/notebook' ? 'active' : ''}`}
+            className={`${bStyle} ${pathname === '/share' ? 'active' : ''}`}
           >
-            Notebook
-          </a>
-        </Link>
-        <Link href="/scorecard" prefetch>
-          <a
-            className={`${bStyle} ${pathname === '/scorecard' ? 'active' : ''}`}
-          >
-            Scorecard
+            Share
           </a>
         </Link>
         <span id="profile-divider" />
         {this.state.isLoggedIn ? (
           <Fragment>
-            <Link href="/user" prefetch>
+            <Link href="/user">
               <a className={`${bStyle}`} href="/">
                 <b>{auth.user!.given_name}</b>
               </a>
