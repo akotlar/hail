@@ -151,7 +151,7 @@ export function initialize() {
 
   if (_auth0) {
     console.warn('Auth.initialize should only be called once');
-    return;
+    return null;
   }
 
   const redirectUri = `${_getBaseUrl()}${CALLBACK_SUFFIX}`;
@@ -263,7 +263,7 @@ export function initStateSSR(cookie: string) {
 
   const parts = cookie.split('; ');
 
-  for (let i = parts.length; i--; ) {
+  for (let i = parts.length; i--;) {
     if (idTokenIdx > -1 && accessTokenIdx > -1 && expIdx > -1) {
       break;
     }
@@ -525,7 +525,7 @@ function _getBaseUrl() {
 
   if (typeof window === 'undefined') {
     console.error('_getBaseUrl should only be called in client context');
-    return;
+    return '';
   }
   const parts = window.location.href.split('/');
 

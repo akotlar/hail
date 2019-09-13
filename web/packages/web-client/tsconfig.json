@@ -25,7 +25,7 @@
     "noImplicitReturns": true,
     "pretty": true,
     "sourceMap": true,
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "typeRoots": [

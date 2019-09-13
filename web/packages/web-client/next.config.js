@@ -5,6 +5,7 @@ const withPurgeCss = require('next-purgecss');
 const withCss = require('@zeit/next-css');
 const withSass = require('@zeit/next-sass');
 const withSize = require('next-size');
+const path = require('path');
 
 const publicRuntimeConfig = {
   AUTH0: {
@@ -49,6 +50,11 @@ const nextConfig = {
       config.optimization.splitChunks.cacheGroups.commons.minChunks = 2;
     }
 
+    config.resolve.extensions.push('.ts', '.tsx');
+    // config.resolve.alias['components'] = path.join(__dirname, 'components');
+    // config.resolve.alias['libs'] = path.join(__dirname, 'libs');
+    // config.resolve.alias['pages'] = path.join(__dirname, 'pages');
+    // config.resolve.alias['styles'] = path.join(__dirname, 'styles')
     return config;
   },
   publicRuntimeConfig
