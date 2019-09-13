@@ -13,18 +13,19 @@ import jinja2
 import humanize
 import aiohttp_jinja2
 from gidgethub import aiohttp as gh_aiohttp, routing as gh_routing, sansio as gh_sansio
-
 from hailtop.batch_client.aioclient import BatchClient, Job
-from hailtop.gear import get_deploy_config, setup_aiohttp_session
-from hailtop.gear.auth import rest_authenticated_developers_only, web_authenticated_developers_only, new_csrf_token, check_csrf_token
-from hailtop import gear
+from hailtop.config import get_deploy_config
+from gear import configure_logging, setup_aiohttp_session, \
+    rest_authenticated_developers_only, web_authenticated_developers_only, \
+    new_csrf_token, check_csrf_token
+
 from .constants import BUCKET
 from .github import Repo, FQBranch, WatchedBranch, UnwatchedBranch
 
 with open(os.environ.get('HAIL_CI_OAUTH_TOKEN', 'oauth-token/oauth-token'), 'r') as f:
     oauth_token = f.read().strip()
 
-gear.configure_logging()
+configure_logging()
 log = logging.getLogger('ci')
 
 uvloop.install()
@@ -324,11 +325,12 @@ aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('ci/templates'))
 
 
 async def on_startup(app):
-    app['client_session'] = aiohttp.ClientSession(
+    session = aiohttp.ClientSession(
         raise_for_status=True,
         timeout=aiohttp.ClientTimeout(total=60))
-    app['github_client'] = gh_aiohttp.GitHubAPI(app['client_session'], 'ci', oauth_token=oauth_token)
-    app['batch_client'] = await BatchClient(app['client_session'])
+    app['client_session'] = session
+    app['github_client'] = gh_aiohttp.GitHubAPI(session, 'ci', oauth_token=oauth_token)
+    app['batch_client'] = await BatchClient(session=session)
 
     with open('/ci-user-secret/sql-config.json', 'r') as f:
         config = json.loads(f.read().strip())

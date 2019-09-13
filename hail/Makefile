@@ -277,7 +277,7 @@ BENCHMARK_ITERS ?= 5
 BENCHMARK_REPLICATES ?= 5
 .PHONY: benchmark
 benchmark: push-benchmark-image install
-	python benchmark/benchmark_in_pipeline.py $(BENCHMARK_LATEST) gs://hail-benchmarks/$(shell whoami) $(HAIL_PIP_VERSION)-$(SHORT_REVISION) $(BENCHMARK_REPLICATES) $(BENCHMARK_ITERS)
+	$(HAIL_PYTHON3) benchmark/benchmark_in_pipeline.py $(BENCHMARK_LATEST) gs://hail-benchmarks/$(shell whoami) $(HAIL_PIP_VERSION)-$(SHORT_REVISION) $(BENCHMARK_REPLICATES) $(BENCHMARK_ITERS)
 
 clean: clean-env clean-docs native-lib-clean
 	./gradlew clean $(GRADLE_ARGS)
@@ -312,7 +312,7 @@ docs: install $(PYTHON_VERSION_INFO)
 
 .PHONY: upload-docs
 upload-docs: docs
-	cd build && tar cvf www.tar.gz www
+	cd build && tar czf www.tar.gz www
 	gsutil -m cp build/www.tar.gz $(docs_location)
 	gsutil -m retention temp set $(docs_location)
 	gsutil -m acl set public-read $(docs_location)
@@ -321,7 +321,7 @@ upload-docs: docs
 test: pytest jvm-test doctest tutorial-test
 
 .PHONY: tutorial-test
-docs-no-test: $(PYTHON_VERSION_INFO)
+docs-no-test: install $(PYTHON_VERSION_INFO)
 	mkdir -p build
 	rm -rf build/www
 	cp -R www build/www

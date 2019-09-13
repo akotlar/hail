@@ -1,6 +1,7 @@
 import abc
 import os
-
+import requests
+import pyspark
 from hail.utils.java import *
 from hail.expr.types import dtype
 from hail.expr.table_type import *
@@ -9,10 +10,6 @@ from hail.expr.blockmatrix_type import *
 from hail.ir.renderer import Renderer
 from hail.table import Table
 from hail.matrixtable import MatrixTable
-
-import requests
-
-import pyspark
 
 
 class Backend(abc.ABC):
@@ -47,6 +44,10 @@ class Backend(abc.ABC):
     @abc.abstractmethod
     def add_reference(self, config):
         pass
+
+    @abc.abstractmethod
+    def load_references_from_dataset(self, path):
+        return []
 
     @abc.abstractmethod
     def from_fasta_file(self, name, fasta_file, index_file, x_contigs, y_contigs, mt_contigs, par):
@@ -157,6 +158,9 @@ class SparkBackend(Backend):
     def add_reference(self, config):
         Env.hail().variant.ReferenceGenome.fromJSON(json.dumps(config))
 
+    def load_references_from_dataset(self, path):
+        return json.loads(Env.hail().variant.ReferenceGenome.fromHailDataset(path))
+
     def from_fasta_file(self, name, fasta_file, index_file, x_contigs, y_contigs, mt_contigs, par):
         Env.hail().variant.ReferenceGenome.fromFASTAFile(
             Env.hc()._jhc,
@@ -206,11 +210,14 @@ class LocalBackend(Backend):
 
 
 class ServiceBackend(Backend):
-    def __init__(self):
-        from hailtop.gear import get_deploy_config
-        deploy_config = get_deploy_config()
+    def __init__(self, deploy_config=None):
+        from hailtop.config import get_deploy_config
+        from hailtop.auth import service_auth_headers
+
+        if not deploy_config:
+            deploy_config = get_deploy_config()
         self.url = deploy_config.base_url('apiserver')
-        self.headers = deploy_config.auth_headers('apiserver')
+        self.headers = service_auth_headers(deploy_config, 'apiserver')
         self._fs = None
 
     @property

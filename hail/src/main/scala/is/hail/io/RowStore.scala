@@ -10,7 +10,6 @@ import is.hail.expr.types.physical._
 import is.hail.expr.types.virtual._
 import is.hail.nativecode._
 import is.hail.utils._
-import is.hail.{HailContext, cxx}
 
 case class PackCodecSpec(child: BufferSpec) extends CodecSpec {
   def makeCodecSpec2(pType: PType) = PackCodecSpec2(pType, child)
@@ -25,24 +24,14 @@ final case class PackCodecSpec2(eType: PType, child: BufferSpec) extends CodecSp
   }
 
   def buildEncoder(t: PType, requestedType: PType): (OutputStream) => Encoder = {
-    if (HailContext.isInitialized && HailContext.get.flags.get("cpp") != null && requestedType == t) {
-      val e: NativeEncoderModule = cxx.PackEncoder.buildModule(t, child)
-      (out: OutputStream) => new NativePackEncoder(out, e)
-    } else {
-      val f = EmitPackEncoder(t, requestedType)
-      out: OutputStream => new CompiledEncoder(child.buildOutputBuffer(out), f)
-    }
+    val f = EmitPackEncoder(t, requestedType)
+    out: OutputStream => new CompiledEncoder(child.buildOutputBuffer(out), f)
   }
 
   def buildDecoder(requestedType: Type): (PType, (InputStream) => Decoder) = {
     val rt = computeSubsetPType(requestedType)
-    if (HailContext.isInitialized && HailContext.get.flags != null && HailContext.get.flags.get("cpp") != null) {
-      val d: NativeDecoderModule = cxx.PackDecoder.buildModule(eType, rt, child)
-      (rt, (in: InputStream) => new NativePackDecoder(in, d))
-    } else {
-      val f = EmitPackDecoder(eType, rt)
-      (rt, (in: InputStream) => new CompiledDecoder(child.buildInputBuffer(in), f))
-    }
+    val f = EmitPackDecoder(eType, rt)
+    (rt, (in: InputStream) => new CompiledDecoder(child.buildInputBuffer(in), f))
   }
 
   def buildCodeInputBuffer(is: Code[InputStream]): Code[InputBuffer] = child.buildCodeInputBuffer(is)
@@ -59,17 +48,6 @@ final case class PackCodecSpec2(eType: PType, child: BufferSpec) extends CodecSp
     val mb = EmitPackEncoder.buildMethod(t, eType, fb)
     (region: Code[Region], off: Code[T], buf: Code[OutputBuffer]) => mb.invoke[Unit](region, off, buf)
   }
-
-  def buildNativeDecoderClass(
-    requestedType: Type,
-    inputStreamType: String,
-    tub: cxx.TranslationUnitBuilder
-  ): (PType, cxx.Class) = {
-    val rt = computeSubsetPType(requestedType)
-    (rt, cxx.PackDecoder(eType, rt, inputStreamType, child, tub))
-  }
-
-  def buildNativeEncoderClass(t: PType, tub: cxx.TranslationUnitBuilder): cxx.Class = cxx.PackEncoder(t, child, tub)
 }
 
 object ShowBuf {
@@ -362,7 +340,7 @@ object EmitPackDecoder {
   }
 
   def apply(t: PType, requestedType: PType): () => AsmFunction2[Region, InputBuffer, Long] = {
-    val fb = new Function2Builder[Region, InputBuffer, Long]
+    val fb = new Function2Builder[Region, InputBuffer, Long]("decoder")
     val mb = fb.apply_method
 
     if (t.isPrimitive) {
@@ -379,46 +357,8 @@ object EmitPackDecoder {
   }
 }
 
-case class NativeDecoderModule(
-  modKey: String,
-  modBinary: Array[Byte]) extends Serializable
-
-final class NativePackDecoder(in: InputStream, module: NativeDecoderModule) extends Decoder {
-  private[this] val st = new NativeStatus()
-  private[this] val mod = new NativeModule(module.modKey, module.modBinary)
-  private[this] val make_decoder = mod.findPtrFuncL1(st, "make_input_buffer")
-  assert(st.ok, st.toString())
-  private[this] val decode_row = mod.findLongFuncL2(st, "decode_row")
-  assert(st.ok, st.toString())
-  private[this] val decode_byte = mod.findLongFuncL1(st, "decode_byte")
-  assert(st.ok, st.toString())
-  private[this] val input = new ObjectArray(in)
-  private[this] val decoder = new NativePtr(make_decoder, st, input.get())
-  input.close()
-  make_decoder.close()
-  assert(st.ok, st.toString())
-
-  def close(): Unit = {
-    decoder.close()
-    decode_row.close()
-    decode_byte.close()
-    // NativePtr's to objects with destructors using the module code must
-    // *not* be close'd last, since the module will be dlclose'd before the
-    // destructor is called.  One safe policy is to close everything in
-    // reverse order, ending with the NativeModule
-    mod.close()
-    st.close()
-    in.close()
-  }
-
-  def readByte(): Byte = decode_byte(st, decoder.get()).toByte
-
-  def readRegionValue(region: Region): Long = decode_row(st, decoder.get(), region.get())
-
-  def seek(offset: Long): Unit = ???
-}
-
-object EmitPackEncoder { self =>
+object EmitPackEncoder {
+  self =>
 
   type Emitter = EstimableEmitter[MethodBuilderSelfLike]
 
@@ -580,66 +520,10 @@ object EmitPackEncoder { self =>
   }
 
   def apply(t: PType, requestedType: PType): () => AsmFunction3[Region, Long, OutputBuffer, Unit] = {
-    val fb = new Function3Builder[Region, Long, OutputBuffer, Unit]
+    val fb = new Function3Builder[Region, Long, OutputBuffer, Unit]("encoder")
     val mb = fb.apply_method
     val offset = mb.getArg[Long](2).load()
     mb.emit(encode(t, requestedType, Region.getIRIntermediate(t)(offset), mb))
     fb.result()
   }
-}
-
-case class NativeEncoderModule(
-  modKey: String,
-  modBinary: Array[Byte]) extends Serializable
-
-final class NativePackEncoder(out: OutputStream, module: NativeEncoderModule) extends Encoder {
-  private[this] val st = new NativeStatus()
-  private[this] val mod = new NativeModule(module.modKey, module.modBinary)
-  private[this] val makeOutputBufferF = mod.findPtrFuncL1(st, "makeOutputBuffer")
-  assert(st.ok, st.toString())
-  private[this] val encodeByteF = mod.findLongFuncL2(st, "encode_byte")
-  assert(st.ok, st.toString())
-  private[this] val encodeRVF = mod.findLongFuncL2(st, "encode_row")
-  assert(st.ok, st.toString())
-  private[this] val flushF = mod.findLongFuncL1(st, "encoder_flush")
-  assert(st.ok, st.toString())
-  private[this] val closeF = mod.findLongFuncL1(st, "encoder_close")
-  assert(st.ok, st.toString())
-
-  private[this] val objArray = new ObjectArray(out)
-  assert(st.ok, st.toString())
-  val buf = new NativePtr(makeOutputBufferF, st, objArray.get())
-  objArray.close()
-  makeOutputBufferF.close()
-
-  def flush(): Unit = {
-    flushF(st, buf.get())
-    assert(st.ok, st.toString())
-    out.flush()
-  }
-
-  def close(): Unit = {
-    closeF(st, buf.get())
-    assert(st.ok, st.toString())
-    buf.close()
-    encodeByteF.close()
-    encodeRVF.close()
-    flushF.close()
-    closeF.close()
-    mod.close()
-    st.close()
-    out.close()
-  }
-
-  def writeRegionValue(region: Region, offset: Long): Unit = {
-    encodeRVF(st, buf.get(), offset)
-    assert(st.ok, st.toString())
-  }
-
-  def writeByte(b: Byte): Unit = {
-    encodeByteF(st, buf.get(), b)
-    assert(st.ok, st.toString())
-  }
-
-  def indexOffset(): Long = ???
 }
