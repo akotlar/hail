@@ -69,6 +69,7 @@ class Pipeline:
     def __init__(self, name=None, backend=None, attributes=None,
                  default_image=None, default_memory=None, default_cpu=None,
                  default_storage=None):
+        print("HELLO WORLD\n")
         self._tasks = []
         self._resource_map = {}
         self._allocated_files = set()

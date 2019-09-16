@@ -3,9 +3,9 @@
 @import './buttons.scss';
 @import './typography.scss';
 @import './input.scss';
+
 html {
   box-sizing: border-box;
-  font-size: 16px;
 }
 
 button,
@@ -60,6 +60,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   0% {
     -webkit-transform: scale(0);
   }
+
   100% {
     -webkit-transform: scale(1);
     opacity: 0;
@@ -71,6 +72,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     -webkit-transform: scale(0);
     transform: scale(0);
   }
+
   100% {
     -webkit-transform: scale(1);
     transform: scale(1);
@@ -81,27 +83,30 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /*** End of https://github.com/tobiasahlin/SpinKit ***/
 
 #theme-site {
-  font-size: 0.875rem;
   background-color: $white;
   height: 100%;
   display: flex;
   flex-direction: column;
-  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+
   -webkit-font-smoothing: antialiased;
   -moz-font-smmothing: grayscale;
+
   input::placeholder {
     -webkit-font-smoothing: antialiased;
     -moz-font-smmothing: grayscale;
   }
+
   #main {
     display: flex;
     flex-direction: column;
     padding: $margin;
     min-height: calc(100vh - 50px * 2);
+
     .centered {
       margin: auto;
     }
   }
+
   #footer {
     /* padding: 7px; */
     height: 50px;
@@ -110,13 +115,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     align-content: center;
     align-items: center;
   }
+
   .material-icons {
     font-size: 1.75rem;
   }
+
   &.dark {
     background-color: $black;
     color: $white;
   }
+
   table {
     border-collapse: collapse;
   }

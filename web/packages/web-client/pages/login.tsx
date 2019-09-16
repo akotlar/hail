@@ -1,6 +1,5 @@
 import { PureComponent, Fragment } from 'react';
 import { login } from '../libs/auth';
-// import cookie from '../libs/cookies';
 import '../styles/pages/login.scss';
 
 declare type state = {
@@ -46,26 +45,26 @@ class Login extends PureComponent<LoginProps> {
         {this.state.failed ? (
           <div>Unauthorized!</div>
         ) : (
-          <Fragment>
-            <h3>Login</h3>
-            <span id="login-choices">
-              <button
-                className="outlined-button"
-                onClick={this.onLoginButtonClick}
-              >
-                Login
+            <Fragment>
+              <h3>Login</h3>
+              <span id="login-choices">
+                <button
+                  className="outlined-button"
+                  onClick={this.onLoginButtonClick}
+                >
+                  Login
               </button>
-              <span id="separator">or</span>
-              <form onSubmit={this.onSubmit}>
-                <input
-                  type="password"
-                  onChange={this.onChange}
-                  placeholder="Enter the workshop password"
-                />
-              </form>
-            </span>
-          </Fragment>
-        )}
+                <span id="separator">or</span>
+                <form onSubmit={this.onSubmit}>
+                  <input
+                    type="password"
+                    onChange={this.onChange}
+                    placeholder="Enter the workshop password"
+                  />
+                </form>
+              </span>
+            </Fragment>
+          )}
       </span>
     );
   }

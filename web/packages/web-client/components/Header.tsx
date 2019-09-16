@@ -75,18 +75,22 @@ class Header extends PureComponent<WithRouterProps> {
             <b>/</b>
           </a>
         </Link>
+        <Link href="/jobs/public">
+          <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Public</a>
+        </Link>
         <Link href="/share">
           <a
-            className={`${bStyle} ${pathname === '/share' ? 'active' : ''}`}
+            className={`home ${bStyle} ${pathname === '/share' ? 'active' : ''}`}
           >
             Share
           </a>
         </Link>
+
         <span id="profile-divider" />
         {this.state.isLoggedIn ? (
           <Fragment>
             <Link href="/user">
-              <a className={`${bStyle}`} href="/">
+              <a className={`${bStyle}`}>
                 <b>{auth.user!.given_name}</b>
               </a>
             </Link>

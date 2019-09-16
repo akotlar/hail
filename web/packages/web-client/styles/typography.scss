@@ -1,11 +1,21 @@
 @import 'variables/typeography.scss';
 @import 'variables/colors.scss';
 
+html {
+  font-size: 16px;
+}
+
 #theme-site {
-  body {
-    font-size: 16px;
-    letter-spacing: 0.5;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: 'Raleway', 'Helvetica', 'Arial', 'sans-serif';
+  font-weight: $weight-light;
+  font-size: 0.875rem;
+
+  a {
+    color: $blue;
+  }
+
+  b {
+    font-weight: $weight-medium;
   }
 
   h1,
@@ -15,10 +25,11 @@
   h5,
   h6 {
     margin: 0px;
+    font-weight: $weight-heavy;
   }
 
   h1 {
-    font-size: 5rem;
+    font-size: 4.5rem;
     margin-left: -5px;
   }
 
@@ -27,34 +38,29 @@
   }
 
   h3 {
-    font-size: 3rem;
+    font-size: 2.5rem;
   }
 
   h4 {
-    font-size: 2.25rem;
+    font-size: 2rem;
   }
 
   h5 {
-    font-size: 1.5rem;
-  }
-
-  h6 {
     font-size: 1.25rem;
   }
 
+  h6 {
+    font-size: 1.125rem;
+  }
+
   .subtitle-1 {
-    font-size: 16px;
+    font-size: .8125rem;
     letter-spacing: 0.15;
   }
 
   .subtitle-2 {
-    font-size: 14px;
+    font-size: .75rem;
     font-size: $weight-medium;
-  }
-
-  .body-2 {
-    font-size: 14px;
-    letter-spacing: 0.25;
   }
 
   &.dark {
