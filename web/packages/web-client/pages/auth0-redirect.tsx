@@ -1,5 +1,5 @@
 import { PureComponent } from 'react';
-import { authenticationCallback } from '../libs/auth';
+import { authenticationCallback } from '../libs/auth0-auth';
 import Router from 'next/router';
 import jscookies from 'js-cookie';
 import {

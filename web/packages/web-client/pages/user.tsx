@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import auth from '../libs/auth';
+import auth from '../libs/auth0-auth';
 
 import '../styles/pages/user.scss';
 

@@ -1,6 +1,7 @@
 import App from 'next/app';
 import Header from '../components/Header';
-import { initialize, isAuthenticated, initStateSSR } from '../libs/auth';
+import { initialize, isAuthenticated, initStateSSR } from '../libs/auth0-auth';
+import { initIdTokenHandler } from '../libs/auth';
 import Router from 'next/router';
 import jscookies from 'js-cookie';
 import 'styles/main.scss';
@@ -70,6 +71,7 @@ export default class MyApp extends App<props> {
         ctx.req.headers.cookie.indexOf('is_dark=1') > -1;
     } else {
       isDark = !!jscookies.get('is_dark');
+      initIdTokenHandler();
     }
 
     if (!isAuthenticated() && protectedRoute[ctx.pathname] === true) {

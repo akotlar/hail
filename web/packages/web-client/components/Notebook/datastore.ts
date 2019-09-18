@@ -1,4 +1,4 @@
-import auth from '../../libs/auth';
+import auth from '../../libs/auth0-auth';
 import fetch from 'isomorphic-unfetch';
 import getConfig from 'next/config';
 

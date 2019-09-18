@@ -5,7 +5,7 @@ import auth, {
   addListener,
   removeListener,
   isAuthenticated
-} from '../libs/auth';
+} from '../libs/auth0-auth';
 import './Header/header.scss';
 import { withRouter } from 'next/router';
 import { WithRouterProps } from 'next/dist/client/with-router';

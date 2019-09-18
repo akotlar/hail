@@ -6,7 +6,15 @@ const withCss = require('@zeit/next-css');
 const withSass = require('@zeit/next-sass');
 const withSize = require('next-size');
 const path = require('path');
-console.info(process.env)
+
+function disableCacheDirectory(config) {
+  config.module.rules
+    .filter(({
+      loader
+    }) => loader === 'babel-loader')
+    .map(l => (l.options.cacheDirectory = false))
+}
+
 const publicRuntimeConfig = {
   API: {
     BASE_URL: process.env.API_BASE_URL
@@ -52,6 +60,8 @@ const nextConfig = {
       // optimizing chunk settings during dev
       config.optimization.splitChunks.cacheGroups.commons.minChunks = 2;
     }
+
+    disableCacheDirectory(config);
 
     config.resolve.extensions.push('.ts', '.tsx');
     return config;
