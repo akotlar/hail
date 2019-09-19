@@ -1,19 +1,31 @@
-import { Component } from 'react';
-import auth from '../libs/auth0-auth';
+import { PureComponent } from 'react';
+// import auth from '../libs/auth0-auth';
+import { initIdTokenHandler } from '../libs/auth';
 
 import '../styles/pages/user.scss';
 
-class UserProfile extends Component {
+class UserProfile extends PureComponent {
   state: any = {
-    loggedIn: true
+    loggedIn: true,
+    name: ''
   };
 
   constructor(props: any) {
     super(props);
   }
 
+  componentDidMount = () => {
+    const handler = initIdTokenHandler();
+
+    const token = handler.decodedToken;
+
+    this.setState({
+      'name': token.name
+    })
+  }
+
   shouldComponentUpdate(_: any, state: any) {
-    return this.state.loggedIn !== state.loggedIn;
+    return this.state.name !== state.name;
   }
 
   render() {
@@ -26,13 +38,13 @@ class UserProfile extends Component {
             alignItems: 'center'
           }}
         >
-          <img
-            src={auth.user!.picture}
+          {/* <img
+            src='#'
             width="50"
             height="50"
             style={{ marginRight: 14 }}
-          />
-          <h3>{auth.user!.name}</h3>
+          /> */}
+          <h3>{this.state.name}</h3>
         </span>
       </div>
     );

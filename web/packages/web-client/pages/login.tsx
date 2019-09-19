@@ -4,6 +4,7 @@ import '../styles/pages/login.scss';
 import '../styles/card.scss';
 import 'isomorphic-unfetch';
 import { initIdTokenHandler, TokenInterface } from '../libs/auth';
+import Router from 'next/router'
 
 import getConfig from "next/config";
 
@@ -33,8 +34,6 @@ class Login extends PureComponent<LoginProps> {
   }
 
   onLoginButtonClick = async (email, password) => {
-    console.info("called");
-
     const tokenHandler: TokenInterface = initIdTokenHandler();
 
     fetch(`${url}/user/auth/local`, {
@@ -51,6 +50,7 @@ class Login extends PureComponent<LoginProps> {
         console.info("data", data);
         tokenHandler.setTokenFromJSON(data);
         console.info("token is", tokenHandler.token)
+        Router.push('/')
       })
       .catch(e => {
         console.info(e.message);

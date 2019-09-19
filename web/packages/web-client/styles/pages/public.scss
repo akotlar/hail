@@ -1,0 +1,29 @@
+@import "../variables/colors.scss";
+@import "../variables/margins.scss";
+
+#theme-site {
+  #public-page {
+    width: $atom-width * 3;
+
+    &.centered {
+      margin-top: 0px;
+    }
+
+    .card {
+      width: 100%;
+    }
+
+
+    #public-search {
+      margin-bottom: 2rem;
+      width: 100%;
+      border: 0px;
+      border-bottom: 1px solid $light-gray;
+      border-radius: 0px;
+
+      &:focus {
+        border-color: $blue;
+      }
+    }
+  }
+}

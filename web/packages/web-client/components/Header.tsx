@@ -1,27 +1,33 @@
 import { PureComponent, Fragment } from 'react';
 import Link from 'next/link';
-import auth, {
-  logout,
-  addListener,
-  removeListener,
-  isAuthenticated
-} from '../libs/auth0-auth';
+// import {
+//   logout,
+//   addListener,
+//   removeListener,
+//   // isAuthenticated
+// } from '../libs/auth0-auth';
+import { initIdTokenHandler, addCallback, removeCallback, loggedInEventName, loggedOutEventName } from '../libs/auth';
 import './Header/header.scss';
-import { withRouter } from 'next/router';
+import Router, { withRouter } from 'next/router';
 import { WithRouterProps } from 'next/dist/client/with-router';
 
 const bStyle = 'link-button';
 
-let listenerID: number;
+// let listenerID: number;
 
 declare type headerState = {
   // showProfileControls: boolean,
   isLoggedIn: boolean;
+  user?: any,
 };
+
+let _loggedInCallbackId = null;
+let _loggedOutCallbackId = null;
 class Header extends PureComponent<WithRouterProps> {
   state: headerState = {
     // showProfileControls: false,
-    isLoggedIn: false
+    isLoggedIn: false,
+    user: null,
   };
 
   onProfileHover = () => {
@@ -37,26 +43,41 @@ class Header extends PureComponent<WithRouterProps> {
   };
 
   onLogout() {
-    logout();
+    const handler = initIdTokenHandler();
+
+    handler.logout();
+    Router.push('/');
   }
 
   constructor(props: any) {
     super(props);
 
-    this.state.isLoggedIn = isAuthenticated();
+    // this.state.isLoggedIn = isAuthenticated();
   }
 
   componentDidMount() {
-    listenerID = addListener(state => {
-      if (this.state.isLoggedIn !== !!state.user) {
-        console.info('changed');
-        this.setState({ isLoggedIn: !!state.user });
-      }
+    const handler = initIdTokenHandler();
+    this.setState({
+      user: handler.decodedToken
     });
+
+    _loggedInCallbackId = addCallback(loggedInEventName, (data) => {
+      this.setState({
+        user: data[0]
+      });
+    })
+
+    _loggedOutCallbackId = addCallback(loggedOutEventName, () => {
+      this.setState({
+        user: null
+      });
+    })
   }
 
   componentWillUnmount() {
-    removeListener(listenerID);
+    // removeListener(listenerID);
+    removeCallback(loggedInEventName, _loggedInCallbackId);
+    removeCallback(loggedOutEventName, _loggedOutCallbackId);
   }
 
   render() {
@@ -75,6 +96,9 @@ class Header extends PureComponent<WithRouterProps> {
             <b>/</b>
           </a>
         </Link>
+        <Link href="/jobs/results">
+          <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Results</a>
+        </Link>
         <Link href="/jobs/public">
           <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Public</a>
         </Link>
@@ -87,11 +111,11 @@ class Header extends PureComponent<WithRouterProps> {
         </Link>
 
         <span id="profile-divider" />
-        {this.state.isLoggedIn ? (
+        {this.state.user ? (
           <Fragment>
             <Link href="/user">
               <a className={`${bStyle}`}>
-                <b>{auth.user!.given_name}</b>
+                <b>{this.state.user!.name}</b>
               </a>
             </Link>
             <button className={`${bStyle}`} onClick={this.onLogout}>

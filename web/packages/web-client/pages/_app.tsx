@@ -6,6 +6,7 @@ import Router from 'next/router';
 import jscookies from 'js-cookie';
 import 'styles/main.scss';
 import 'animate.css';
+import { preload } from '../libs/jobTracker/jobTracker';
 import {
   Notebook,
   startRequest,
@@ -71,7 +72,6 @@ export default class MyApp extends App<props> {
         ctx.req.headers.cookie.indexOf('is_dark=1') > -1;
     } else {
       isDark = !!jscookies.get('is_dark');
-      initIdTokenHandler();
     }
 
     if (!isAuthenticated() && protectedRoute[ctx.pathname] === true) {
@@ -97,6 +97,11 @@ export default class MyApp extends App<props> {
     }
 
     return { pageProps, isDark };
+  }
+
+  componentDidMount() {
+    initIdTokenHandler();
+    preload();
   }
 
   onDarkToggle = () => {

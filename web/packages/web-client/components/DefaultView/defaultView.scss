@@ -1,0 +1,9 @@
+@import "styles/variables/margins.scss";
+
+#theme-site {
+  .default-view {
+    a+a {
+      margin-left: $margin;
+    }
+  }
+}
