@@ -96,10 +96,10 @@ class Header extends PureComponent<WithRouterProps> {
             <b>/</b>
           </a>
         </Link>
-        <Link href="/jobs/results">
+        <Link href="/jobs/results?type=completed" replace>
           <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Results</a>
         </Link>
-        <Link href="/jobs/public">
+        <Link href="/jobs/public?type=public" replace>
           <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Public</a>
         </Link>
         <Link href="/share">

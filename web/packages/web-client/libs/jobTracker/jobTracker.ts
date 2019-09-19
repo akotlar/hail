@@ -40,6 +40,7 @@ export type JobType = {
   options: { index: boolean },
   search: object[],
   config: string,
+  _id: string,
 }
 
 const data: { [type: string]: JobType[] } = {
@@ -98,15 +99,19 @@ export default {
   }
 };
 
+let _fetchPromise = null;
 async function _preload(token?: string) {
+  if (_fetchPromise) {
+    console.info('have');
+    return Promise.all(_fetchPromise)
+  }
   // async function _preload({ signal }: any = {}) {
   if (!token) {
     const auth = initIdTokenHandler();
     token = auth.token;
   }
 
-  const fetches = [['completed', 'completed'], ['public', 'all/public']].map(async obj => {
-    console.info('doing', obj, `${url}/jobs/list/${obj[1]}`);
+  _fetchPromise = [['completed', 'completed'], ['public', 'all/public']].map(async obj => {
     try {
       const resData = await fetch(`${url}/jobs/list/${obj[1]}`, {
         headers: {
@@ -118,11 +123,14 @@ async function _preload(token?: string) {
       data[obj[0]] = resData;
       callbacks.call(obj[0], data[obj[0]]);
     } catch (e) {
+      console.info("caught");
       console.error(e);
     }
+
+    _fetchPromise = null;
   });
 
-  return Promise.all(fetches);
+  return Promise.all(_fetchPromise);
 }
 
 // async function _preload2 {
@@ -163,16 +171,18 @@ async function _preload(token?: string) {
 //   }
 // }
 
-export function preload() {
+if (typeof window !== 'undefined') {
   addAuthCallback(loggedInEventName, (data) => {
-    console.info('data', data);
+    console.info("calling");
     _preload(data[1]);
   });
 
   addAuthCallback(loggedOutEventName, () => {
     clearData();
   });
+}
 
+export function preload() {
   return _preload();
 }
 

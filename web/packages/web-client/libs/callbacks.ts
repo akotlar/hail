@@ -16,8 +16,6 @@ export default class Callbacks {
       return;
     }
 
-    console.info("removing", type);
-
     // Shift appears to be faster than splice
     if (elem == 1) {
       this._callbacks[type].shift();

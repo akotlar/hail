@@ -2,8 +2,19 @@
 @import "../variables/margins.scss";
 
 #theme-site {
+  position: relative;
+
   #public-page {
     width: $atom-width * 3;
+
+    #click-handler {
+      width: 100%;
+      position: absolute;
+      display: block;
+      top: 0;
+      left: 0;
+      height: 100%;
+    }
 
     &.centered {
       margin-top: 0px;
@@ -11,6 +22,7 @@
 
     .card {
       width: 100%;
+      cursor: pointer;
     }
 
 
