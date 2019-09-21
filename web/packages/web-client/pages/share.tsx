@@ -1,310 +1,285 @@
-import { PureComponent } from 'react';
-// import getConfig from "next/config";
-
-import '../styles/pages/share.scss';
-// const url = getConfig().publicRuntimeConfig.API.BASE_URL;
-// import Router from 'next/router';
-// import jobTracker, { addCallback, removeCallback } from "../libs/jobTracker/jobTracker";
+import React from "react";
+// import { removeCallback, JobType, addCallback } from "../libs/jobTracker/jobTracker";
 import "styles/card.scss";
 import "styles/pages/public.scss";
-import 'isomorphic-unfetch';
+import Fuse from 'fuse.js';
+import Router, { withRouter } from 'next/router';
+import available from '../libs/analysisTracker/analysisLister';
 
-
-declare type props = {
-  pageProps: {
-    available: [];
-  };
-};
-
-declare type component = {
-  name: string,
-  id: string,
-  inputs: {
-    [type: string]: {
-      name: string,
-      path: string
-    }[]
-  },
-  outputs: {
-    [type: string]: {
-      name: string,
-      path: string
-    }[]
-  },
-};
+// import 'react-use-gesture';
+// import DraggableList from '../../components/DraggableList';
 
 declare type state = {
-  unauthorized: boolean,
-  available: component[],
-  selectedComponents: component[],
-  alive: [],
-  filteredComponents: component[],
-  loading: number, //-1, 0, 1: failed, not, loading
-  data: object[],
-  myJobs: object[],
+  jobs: any[],
+  jobsSelected: [number, number]
+  filteredJobs: any[];
+  compatibleJobs: any[];
+  jobSelected: number;
 };
 
-
-
-
-// let _callbackId: number;
-const queryType = "public";
-
-// TODO: decide whether we want to show only notebooks whose svc and pod status
-// TODO: check that there are no side-effects for mutating this.state.notebooks
-// are both Running
-// Argument against this is to give fine-grained insight into what Kube is doing
-// Because Kube is not a good queue, and will give out-of-order events
-// which may be easier for the user to understand, that for us to present always as in-order
-class PipelinePage extends PureComponent<any, state> {
+class Jobs extends React.PureComponent {
   state: state = {
-    data: [{
-      type: "vcf",
-      name: "My cool file",
-      path: "s3://1000g-vcf/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.100Klines_rand.vcf.gz"
-    }],
-    myJobs: [],
-    loading: 0,
-    unauthorized: false,
-    selectedComponents: [],
-    available: [
-      {
-        "name": "My Cool thing VCF",
-        id: "1",
-        inputs: {
-          "vcf": [{
-            name: "My cool file",
-            path: "/path/to/file"
-          }],
-        },
-        "outputs": {
-          "MatrixTable": [{
-            name: "some file",
-            path: "/path/to/file"
-          }]
-        }
-
-      },
-      {
-        "name": "My Cool thing MatrixTable",
-        id: "2",
-        inputs: {
-          "MatrixTable": [{
-            name: "some file",
-            path: "/path/to/file"
-          }]
-        },
-        "outputs":
-        {
-          "Table": [{
-            name: "some file",
-            path: "/path/to/file"
-          }],
-        }
-
-      },
-      {
-        "name": "My Cool thing Table",
-        id: "3",
-        inputs: {
-          "Table": [{
-            name: "some file",
-            path: "/path/to/file"
-          }]
-        },
-        "outputs":
-        {
-          "MatrixTable": [{
-            name: "some file",
-            path: "/path/to/file"
-          }],
-        }
-
-      },
-    ]
-    ,
-    filteredComponents: [],
-    alive: []
+    jobs: available,
+    jobsSelected: [-1, -1],
+    filteredJobs: available,
+    compatibleJobs: [],
+    jobSelected: null,
   };
 
+  // _callbackId?: number = null;
 
+  fuse?: any = null
 
   static async getInitialProps({ query }: any) {
     return {
-      type: query.type || queryType
+      type: query.type
     };
   }
 
-  // handleChange = selectedOption => {
-  //   this.setState({ sele });
-  // };
-
-
-  componentWillUnmount() {
-    // removeCallback(this.state.jobType, _callbackId);
+  constructor(props: any) {
+    super(props);
   }
 
-  constructor(props: props) {
-    super(props);
-    this.state.filteredComponents = this.state.available;
-    // this.state.myJobs = jobTracker.
+  handleChange = selectedOption => {
+    this.setState({ selectedOption });
+  };
 
-    // _callbackId = addCallback(props.type, data => {
-    //   this.setState(() => ({
-    //     jobs: data
-    //   }));
+  // componentWillUnmount() {
+  //   removeCallback((this.props as any).type, this._callbackId);
+  // }
+
+  componentDidMount() {
+    // const type = (this.props as any).type;
+    this.setState({})
+    this.fuse = new Fuse(available, {
+      keys: ['name']
+    })
+
+    // this._callbackId = addCallback(type, (data: JobType[]) => {
+    //   if (this.state.jobs != data) {
+    //     this.setState(() => ({ jobs: data, filteredJobs: data }));
+
+    //     this.fuse = new Fuse(data, {
+    //       shouldSort: true,
+    //       threshold: 0,
+    //       location: 0,
+    //       distance: 10,
+    //       maxPatternLength: 32,
+    //       minMatchCharLength: 1,
+    //       tokenize: true,
+    //       // matchAllTokens: true,
+    //       findAllMatches: true,
+    //       keys: [
+    //         "name", 'inputFileName', 'createdAt', 'submittedDate', 'assembly', 'type', 'log.progress', 'visibility'
+    //       ]
+    //     });
+    //   }
     // });
   }
 
-  handleDataDropped = (event) => {
-    const [idx, id] = event.dataTransfer.getData('pipelineStep');
+  componentDidUpdate(prevProps) {
+    console.info('prevprops', prevProps, this.props);
+    // this.jobSelected
+    console.info("ye", (this.props as any).router.query.id);
+    const { query } = (this.props as any).router
+    // verify props have changed to avoid an infinite loop
+    if (query.id !== prevProps.router.query.id) {
+      // fetch data based on the new query
+      console.info("id", query.id);
+      this.setState(() => ({
+        jobSelected: typeof query.id === 'undefined' ? null : available[query.id]
+      }))
+    }
+  }
 
-    console.info("stuff", event.dataTransfer.getData('pipelineStep'), idx, id);
+  handleClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>, idx: number) => {
+    e.preventDefault();
 
-    this.setState((prevState) => {
-      const n = [].concat(prevState.selectedComponents, this.state.available[idx]);
+    // e.stopPropagation();
+    // e.nativeEvent.stopImmediatePropagation();
+    if (e.shiftKey) {
+      let [min, max] = this.state.jobsSelected;
+
+      if (idx > min) {
+        max = idx;
+      } else if (idx == min) {
+        min = idx;
+        max = idx;
+      } else if (idx > min) {
+        max = idx;
+      } else {
+        min = idx;
+      }
+
+      this.setState(() => ({
+        jobsSelected: [min, max],
+      }))
+
+      return;
+    }
+
+
+
+    this.setState((old: state) => {
+      const [old_min, old_max] = old.jobsSelected;
+
+      if (old_min == idx && old_max == idx) {
+        return {
+          jobsSelected: [-1, -1],
+          compatibleJobs: [],
+        }
+      }
+
+      const compatible = this.getCompatible(idx);
 
       return {
-        selectedComponents: n
+        jobsSelected: [idx, idx],
+        filteredJobs: [available[idx]],
+        compatibleJobs: compatible,
       }
-    });
+    })
 
-    this.filterCompatible(idx);
-    // Router.push('/share/run')
-    // fetch(`${url}/jobs/submit/pipeline`, {
-    //   method: "POST"
-    // })
-    //   .then(r => r.json())
-    //   .then(data => {
-    //     console.info("data", data);
-    //   })
-    //   .catch(e => {
-    //     console.info(e.message);
-    //     console.info("failed to fetch", e.message);
-    //   });
+    Router.push('/share?id=1', '/share?id=1', { shallow: true })
+
   }
 
-  handleDragStart = (event, idx, id) => {
-    event.dataTransfer.setData("pipelineStep", [idx, id]);
-    console.info('e', event.dataTransfer.getData("pipelineStep"))
-  }
-
-  filterCompatible = (idx: number) => {
-    let job = this.state.available[idx];
+  getCompatible: (idx: number) => any[] = (idx) => {
+    let job = this.state.jobs[idx];
 
     console.info(job);
 
-    let res = {};
+    let res: {
+      [type: string]: {
+        length: number,
+        items: any[],
+      }
+    } = {};
     Object.keys(job.outputs).forEach(key => {
-      res[key] = job.outputs[key].length;
+      const j = job.outputs[key];
+      res[key] = {
+        length: j.length,
+        items: j
+      }
     });
 
     console.info("keys", res);
 
-    let newCompatible = this.state.available.filter((job, jIdx) => {
+    let newCompatible = this.state.jobs.filter((job, jIdx) => {
       if (jIdx == idx) {
         return false;
       }
 
       for (let key in job.inputs) {
-        if (!res[key] || res[key] != job.inputs[key].length) {
+        if (!res[key] || res[key].length != job.inputs[key].length) {
           return false;
         }
       }
       return true;
     })
 
-    console.info(newCompatible);
+    return newCompatible;
+  }
 
-    this.setState({
-      filteredComponents: newCompatible
-    })
+  filterList = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (this.fuse) {
+      const input = e.target.value;
+
+      if (!input) {
+        this.setState((old: state) => ({
+          filteredJobs: old.jobs,
+          jobsSelected: [-1, -1]
+        }));
+
+        return;
+      }
+
+      const res = this.fuse.search(input);
+
+      this.setState(() => ({
+        filteredJobs: res,
+        jobsSelected: [-1, -1]
+      }));
+    }
   }
 
   render() {
     return (
-      <div id="share">
-        {/* <div id='left-navbar'>
-          <ul>
-            <li className='draggable' draggable onDragStart={() => console.info('started')}>
-              Data 1
-            </li>
-            <li className='draggable' draggable onDragStart={() => console.info('started')}>
-              Data 2
-            </li>
+      <div id='public-page' className='centered'>
+        {this.state.jobSelected !== null ?
+          <div>Stuff</div> :
 
-          </ul>
-        </div> */}
+          <span className='right'>
+            <input id='public-search' className='outlined' type='text' placeholder='search' onChange={(e) => this.filterList(e)} />
+            <span id='control-center'>
+              <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
+                <i className='material-icons left'>
+                  delete_outline
+                        </i>
+              </button>
+              <div>{this.state.jobsSelected[0] === -1 ? 0 : (this.state.jobsSelected[1] == this.state.jobsSelected[0] ? 1 : this.state.jobsSelected[1] - this.state.jobsSelected[0] + 1)} selected</div>
+            </span>
 
-
-        <div className='item-list' style={{ 'display': 'flex', 'marginLeft': 0 }}
-        >
-          {/* <i
-            className="material-icons link-button"
-            style={{ marginLeft: '56px' }}
-
-          >
-            add_circle_outline
-                </i> */}
-          {
-            this.state.filteredComponents.map((item, idx) =>
-              <div key={idx} onClick={() => this.filterCompatible(idx)} className='card shadow1'
-                style={{ flexDirection: 'column', alignItems: 'flex-start' }}
-                draggable
-                onDragStart={(e) => this.handleDragStart(e, idx, item.id)}>
-                <h4>{item.name}</h4>
-                Welcome to the future of sharing
-                  <div className='body'>
-                  <h5>Inputs</h5>
-                  <h5>Outputs</h5>
+            {this.state.filteredJobs.map((job, idx) =>
+              <div key={idx} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} onClick={(e) => this.handleClick(e, idx)} >
+                <div className='header'>
+                  <h5>{job.name}</h5>
+                  <i className="material-icons">
+                    edit
+                  </i>
                 </div>
-                <div className="ratings">
-                  <div className="empty-stars"></div>
-                  <div className="full-stars" style={{ width: "70%" }}></div>
+                <div className='content'>
+                  <div className='row'>
+                    <span className='left'>Created on:</span>
+                    <b className='right'>{job.name}</b>
+                  </div>
+                  <div className='row'>
+                    <h5 className='left'>Inputs</h5>
+                    {Object.entries(job.inputs).map(val => {
+                      <b className='right'>{val[0]}</b>
+                    })}
+                  </div>
+                  {/* <div className='row'>
+                  <span className='left'>{job.type == 'annotation' ? "Input:" : "Query:"}</span>
+                  <b className='right'>
+                    {
+                      job.type == 'annotation'
+                        ? <a href={job.inputFileName}>{job.inputFileName}</a>
+                        : "Some query"
+                    }
+                  </b>
+                </div> */}
                 </div>
               </div>
             )}
-
-
-        </div>
-        <div id='selected-items' className='item-list'
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={this.handleDataDropped}
-        >
-          {/* <i
-            className="material-icons link-button"
-            style={{ marginLeft: '56px' }}
-
-          >
-            add_circle_outline
-                </i> */}
-          {
-            this.state.selectedComponents.length == 0 ?
-              <div id='dropper'>Drop Me bitch</div>
-
-              : this.state.selectedComponents.map((item, idx) => {
-                console.info("item", item);
-                return (
-                  <div key={idx} onClick={() => this.filterCompatible(idx)} className='card'
-                    style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <h4>{item.name}</h4>
-                    Welcome to the future of sharing
-                  <div className='body'>
-                      <h5>Inputs</h5>
-                      <h5>Outputs</h5>
+            {/* {(this.state.compatibleJobs.length > 0 &&
+            <div id='compatible' >
+              <h3>Compatible</h3>
+              {this.state.compatibleJobs.map((job, idx) =>
+                <div key={idx} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} onClick={(e) => this.handleClick(e, idx)} >
+                  <h5 className='header'>{job.name}</h5>
+                  <div className='content'>
+                    <div className='row'>
+                      <span className='left'>Created on:</span>
+                      <b className='right'>{job.name}</b>
                     </div>
-                    <div className="ratings">
-                      <div className="empty-stars"></div>
-                      <div className="full-stars" style={{ width: "70%" }}></div>
+                    <div className='row'>
+                      <h5 className='left'>Inputs</h5>
+                      {Object.entries(job.inputs).map(val => {
+                        <b className='right'>{val[0]}</b>
+                      })}
                     </div>
-                  </div>)
-              })}
+                  
+                  </div>
+                </div>
+              )}
+            </div>)} */}
 
-
-        </div>
-      </div >
+          </span>
+        }
+      </div>
     );
+
   }
 }
 
-export default PipelinePage;
+export default withRouter(Jobs);

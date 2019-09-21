@@ -16,6 +16,15 @@
       height: 100%;
     }
 
+    #control-center {
+      display: flex;
+      align-items: center;
+
+      #delete {
+        margin-right: 1rem;
+      }
+    }
+
     &.centered {
       margin-top: 0px;
     }
@@ -23,11 +32,19 @@
     .card {
       width: 100%;
       cursor: pointer;
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+      }
     }
 
+    #control-center,
+    #public-search {
+      margin-bottom: 1.5rem;
+    }
 
     #public-search {
-      margin-bottom: 2rem;
       width: 100%;
       border: 0px;
       border-bottom: 1px solid $light-gray;

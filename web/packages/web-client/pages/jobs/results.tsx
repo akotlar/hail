@@ -3,6 +3,8 @@ import { removeCallback, JobType, addCallback } from "../../libs/jobTracker/jobT
 import "styles/card.scss";
 import "styles/pages/public.scss";
 import Fuse from 'fuse.js';
+// import 'react-use-gesture';
+// import DraggableList from '../../components/DraggableList';
 
 declare type state = {
     jobsSelected: [number, number]
@@ -75,9 +77,11 @@ class Jobs extends React.PureComponent {
         if (e.shiftKey) {
             let [min, max] = this.state.jobsSelected;
 
-            if (idx == max) {
-                min = -1;
-                max = -1;
+            if (idx > min) {
+                max = idx;
+            } else if (idx == min) {
+                min = idx;
+                max = idx;
             } else if (idx > min) {
                 max = idx;
             } else {
@@ -113,7 +117,8 @@ class Jobs extends React.PureComponent {
 
             if (!input) {
                 this.setState((old: state) => ({
-                    filteredJobs: old.jobs
+                    filteredJobs: old.jobs,
+                    jobsSelected: [-1, -1]
                 }));
 
                 return;
@@ -122,20 +127,28 @@ class Jobs extends React.PureComponent {
             const res = this.fuse.search(input);
 
             this.setState(() => ({
-                filteredJobs: res
+                filteredJobs: res,
+                jobsSelected: [-1, -1]
             }));
         }
     }
 
     render() {
         return (
-            <div id='public-page' className='centered' style={{ flexDirection: 'row' }}>
+            <div id='public-page' className='centered'>
                 {/* <div id='click-handler' onClick={(e) => this.handleClick(e, -1)} style={{ width: '100%' }}></div> */}
-                <div id='fixed'>Test</div>
-                <span style={{ flexDirection: 'column', display: 'flex' }}>
+
+                <span className='right'>
                     <input id='public-search' className='outlined' type='text' placeholder='search' onChange={(e) => this.filterList(e)} />
-
-
+                    <span id='control-center'>
+                        <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
+                            <i className='material-icons left'>
+                                delete_outline
+                        </i>
+                        </button>
+                        <div>{this.state.jobsSelected[0] === -1 ? 0 : (this.state.jobsSelected[1] == this.state.jobsSelected[0] ? 1 : this.state.jobsSelected[1] - this.state.jobsSelected[0] + 1)} selected</div>
+                    </span>
+                    {/* <DraggableList items={this.state.filteredJobs} /> */}
                     {this.state.filteredJobs.map((job, idx) =>
                         <div key={idx} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} onClick={(e) => this.handleClick(e, idx)} >
                             <h5 className='header'>{job.name}</h5>
@@ -162,7 +175,7 @@ class Jobs extends React.PureComponent {
                         </div>
                     )}
                 </span>
-            </div>
+            </div >
         );
 
     }

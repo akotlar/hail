@@ -1,8 +1,12 @@
 @import './variables/colors.scss';
 
 #theme-site {
-  a {
+
+  a,
+  .link-button,
+  button {
     color: $black;
+    cursor: pointer;
     text-decoration: none;
 
     &.active,
@@ -16,25 +20,41 @@
     /* border: none; */
     /* display: inline-block; */
     /* width: 20px; */
-    border: 1px solid $light-gray;
+    border: 1px solid $black;
     background-color: $white;
     padding: 10px;
     border-radius: 3px;
+    line-height: 1;
 
     &:focus,
     &:hover {
       border-color: $devil-gray;
     }
-  }
 
-  .link-button,
-  button {
-    cursor: pointer;
-    color: $black;
+    &:disabled {
+      color: $light-gray;
+      border-color: $light-gray;
+      cursor: default;
 
-    &:focus,
-    &:hover {
-      color: $devil-gray;
+      &:focus,
+      &:hover {
+        border-color: $light-gray;
+        color: $light-gray;
+      }
+    }
+
+    &.icon-button {
+      border-radius: 50%;
+      height: 50px;
+    }
+
+    &.red:not(:disabled) {
+
+      &:hover,
+      &:focus {
+        color: $red;
+        border-color: $red;
+      }
     }
   }
 

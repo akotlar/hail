@@ -7,6 +7,7 @@ import jscookies from 'js-cookie';
 import 'styles/main.scss';
 import 'animate.css';
 import { preload } from '../libs/jobTracker/jobTracker';
+// import ACard from '../components/Analysis/Card';
 import {
   Notebook,
   startRequest,
@@ -125,6 +126,7 @@ export default class MyApp extends App<props> {
         <Header />
         <span id="main">
           <Component {...pageProps} />
+          {/* <ACard /> */}
         </span>
 
         <span id="footer">
