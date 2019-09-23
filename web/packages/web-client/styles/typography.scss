@@ -7,15 +7,33 @@ html {
 
 #theme-site {
   font-family: 'Raleway', 'Helvetica', 'Arial', 'sans-serif';
-  font-weight: $weight-light;
+  font-weight: $weight-normal;
   font-size: 0.875rem;
 
-  a {
-    color: $blue;
+  .subheader {
+    font-weight: $weight-medium;
   }
 
-  b {
-    font-weight: $weight-medium;
+  .material-icons {
+    font-size: 1.725rem;
+  }
+
+  a {
+    color: $light-blue;
+
+    &.active,
+    &:hover {
+      color: $blue;
+    }
+  }
+
+  b,
+  strong {
+    font-weight: $weight-heavy;
+  }
+
+  .primary {
+    color: $light-blue
   }
 
   h1,
@@ -25,24 +43,24 @@ html {
   h5,
   h6 {
     margin: 0px;
-    font-weight: $weight-medium;
+    font-weight: $weight-normal;
   }
 
   h1 {
-    font-size: 4.5rem;
-    margin-left: -5px;
+    font-weight: $weight-light;
+    font-size: 3.5rem;
   }
 
   h2 {
-    font-size: 3.75rem;
+    font-size: 2.875rem;
   }
 
   h3 {
-    font-size: 2.5rem;
+    font-size: 2.125rem;
   }
 
   h4 {
-    font-size: 2.125rem;
+    font-size: 1.5rem;
   }
 
   h5 {
@@ -50,7 +68,7 @@ html {
   }
 
   h6 {
-    font-size: 1.125rem;
+    font-size: 1rem;
   }
 
   .subtitle-1 {

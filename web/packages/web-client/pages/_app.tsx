@@ -4,15 +4,23 @@ import { initialize, isAuthenticated, initStateSSR } from '../libs/auth0-auth';
 import { initIdTokenHandler } from '../libs/auth';
 import Router from 'next/router';
 import jscookies from 'js-cookie';
-import 'styles/main.scss';
 import 'animate.css';
-import { preload } from '../libs/jobTracker/jobTracker';
-// import ACard from '../components/Analysis/Card';
-import {
-  Notebook,
-  startRequest,
-  startListener
-} from '../components/Notebook/datastore';
+import 'normalize.css';
+import 'styles/main.scss';
+
+import { init as initJobTracker } from '../libs/jobTracker/jobTracker';
+import { ThemeProvider } from '@material-ui/styles';
+import { listen as socketIOlisten } from '../libs/socketio';
+import theme from '../libs/theme';
+
+// import CssBaseline from '@material-ui/core/CssBaseline';
+
+
+// import {
+//   Notebook,
+//   startRequest,
+//   startListener
+// } from '../components/Notebook/datastore';
 
 // TODO: think about order of initialization of auth module
 // TODO: set some kind of protected property on routes, instead of
@@ -48,9 +56,9 @@ export default class MyApp extends App<props> {
       // in constructor may do so
       initialize();
 
-      if (isAuthenticated() && !Notebook.initialized) {
-        startRequest().then(() => startListener());
-      }
+      // if (isAuthenticated() && !Notebook.initialized) {
+      //   startRequest().then(() => startListener());
+      // }
     }
 
     this.state.isDark = props.isDark;
@@ -102,7 +110,14 @@ export default class MyApp extends App<props> {
 
   componentDidMount() {
     initIdTokenHandler();
-    preload();
+    initJobTracker();
+    socketIOlisten();
+
+    // Remove the server-side injected CSS.
+    // const jssStyles = document.querySelector('#jss-server-side');
+    // if (jssStyles) {
+    //   jssStyles.parentNode.removeChild(jssStyles);
+    // }
   }
 
   onDarkToggle = () => {
@@ -122,23 +137,25 @@ export default class MyApp extends App<props> {
     const { Component, pageProps } = this.props;
 
     return (
-      <span id="theme-site" className={this.state.isDark ? 'dark' : ''}>
-        <Header />
-        <span id="main">
-          <Component {...pageProps} />
-          {/* <ACard /> */}
-        </span>
+      <ThemeProvider theme={theme}>
+        <span id="theme-site" className={this.state.isDark ? 'dark' : ''}>
+          <Header />
+          <span id="main">
+            <Component {...pageProps} />
+            {/* <ACard /> */}
+          </span>
 
-        <span id="footer">
-          <i
-            className="material-icons"
-            style={{ cursor: 'pointer', fontSize: '1rem' }}
-            onClick={this.onDarkToggle}
-          >
-            wb_sunny
+          <span id="footer">
+            <i
+              className="material-icons"
+              style={{ cursor: 'pointer', fontSize: '1rem' }}
+              onClick={this.onDarkToggle}
+            >
+              wb_sunny
             </i>
+          </span>
         </span>
-      </span>
+      </ThemeProvider>
     );
   }
 }

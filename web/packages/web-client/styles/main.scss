@@ -8,12 +8,6 @@ html {
   box-sizing: border-box;
 }
 
-button,
-input {
-  margin: 0px;
-  font-size: 0.875rem;
-}
-
 *,
 *:before,
 *:after {
@@ -50,7 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   width: 1.75rem;
   height: 1.75rem;
   margin: auto;
-  background-color: $devil-gray;
+  background-color: $gray;
   border-radius: 100%;
   -webkit-animation: sk-scaleout 1s infinite ease-in-out;
   animation: sk-scaleout 1s infinite ease-in-out;
@@ -99,9 +93,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     align-items: flex-start;
     justify-content: flex-start;
     align-content: flex-start;
+    background-color: inherit;
 
     padding: $margin;
-    min-height: calc(100vh - 50px * 2);
+    min-height: $main-height;
 
     .centered {
       margin: auto;
@@ -115,10 +110,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     padding: 0 $margin;
     align-content: center;
     align-items: center;
-  }
-
-  .material-icons {
-    font-size: 1.75rem;
+    background-color: inherit;
   }
 
   &.dark {

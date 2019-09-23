@@ -49,33 +49,19 @@ const data: { [type: string]: JobType[] } = {
   public: []
 }
 
-const clearData = () => {
-  data['all'] = [];
-  data['completed'] = [];
-  data['public'] = [];
+const callback_items = {};
+const callbacks = new Callbacks(callback_items);
 
-  callbacks.call('all', data['all']);
-  callbacks.call('completed', data['completed'])
-  callbacks.call('public', data['public']);
+for (const key in data) {
+  callback_items[key] = [];
 }
-// let _all = {};
-// let _completed: job[] = [];
-// // let _incomplete = {};
-// // let _failed = {};
-// // let _deleted = {};
-// let _public: job[] = [];
-// let _shared = {};
 
-
-
-const callbacks = new Callbacks({
-  public: [],
-  all: [],
-  completed: [],
-  shared: [],
-  deleted: [],
-  failed: []
-});
+const clearData = () => {
+  for (const key in data) {
+    data[key] = [];
+    callbacks.call(key, data[key]);
+  }
+}
 
 export function addCallback(type: string, action: (data: JobType[]) => void): number {
   const id = callbacks.add(type, action);
@@ -123,8 +109,7 @@ async function _preload(token?: string) {
       data[obj[0]] = resData;
       callbacks.call(obj[0], data[obj[0]]);
     } catch (e) {
-      console.info("caught");
-      console.error(e);
+      console.warn(e);
     }
 
     _fetchPromise = null;
@@ -133,56 +118,13 @@ async function _preload(token?: string) {
   return Promise.all(_fetchPromise);
 }
 
-// async function _preload2 {
-//   if (typeof window !== 'undefined') {
-//     const auth = initIdTokenHandler();
-//     const token = auth.token;
-
-//     console.info('the token', token);
-
-//     fetch(`${ url } / jobs / list / all / public`, {
-//       credentials: "include"
-//     })
-//       .then(r => r.json())
-//       .then(data => {
-//         _public = data;
-//         callbacks.call("public", data);
-//       })
-//       .catch(e => {
-//         console.info(e.message);
-//         console.info("failed to fetch", e.message);
-//       });
-
-//     fetch(`${ url } / jobs / list / completed`, {
-//       method: "GET",
-//       headers: {
-//         'Authorization': 'Bearer ' + token,
-//       }
-//     })
-//       .then(r => r.json())
-//       .then(data => {
-//         _completed = data;
-//         callbacks.call("completed", data);
-//       })
-//       .catch(e => {
-//         console.info(e.message);
-//         console.info("failed to fetch", e.message);
-//       });
-//   }
-// }
-
-if (typeof window !== 'undefined') {
+export function init() {
   addAuthCallback(loggedInEventName, (data) => {
-    console.info("calling");
     _preload(data[1]);
   });
 
   addAuthCallback(loggedOutEventName, () => {
     clearData();
   });
-}
 
-export function preload() {
-  return _preload();
 }
-

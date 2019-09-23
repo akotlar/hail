@@ -5,54 +5,96 @@
   position: relative;
 
   #public-page {
-    width: $atom-width * 3;
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    align-content: space-between;
+    height: $content-height;
 
-    #click-handler {
-      width: 100%;
-      position: absolute;
-      display: block;
-      top: 0;
-      left: 0;
+    #left-list {
+      max-width: 420px;
+      min-width: 420px;
       height: 100%;
+
+      margin-right: $margin * 4;
+
+      // .job-list {
+      //   font-size: .75rem;
+      // }
     }
 
-    #control-center {
+
+    #right-list {
+      width: 640px;
+
+      height: 100%;
+
+      &.active {
+        width: 100%;
+      }
+    }
+
+    .list {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      height: $content-height;
 
-      #delete {
-        margin-right: 1rem;
+      .job-list {
+        overflow-y: scroll;
+        /*Hack because W3C overflow spec is broken (auto on the other dimension
+        https://stackoverflow.com/questions/6421966/css-overflow-x-visible-and-overflow-y-hidden-causing-scrollbar-issue
+        */
+        padding: 10px 12px 10px 10px;
+        margin: -10px;
       }
     }
+  }
 
-    &.centered {
-      margin-top: 0px;
+  #click-handler {
+    width: 100%;
+    position: absolute;
+    display: block;
+    top: 0;
+    left: 0;
+    height: 100%;
+  }
+
+  #control-center {
+    display: flex;
+    align-items: center;
+
+    #delete {
+      margin-right: 1rem;
     }
+  }
 
-    .card {
-      width: 100%;
-      cursor: pointer;
+  &.centered {
+    margin-top: 0px;
+  }
 
-      .header {
-        display: flex;
-        justify-content: space-between;
-      }
+  .card {
+    width: 100%;
+    cursor: pointer;
+
+    .header {
+      display: flex;
+      justify-content: space-between;
     }
+  }
 
-    #control-center,
-    #public-search {
-      margin-bottom: 1.5rem;
-    }
+  #control-center,
+  #public-search {
+    margin-bottom: 1.5rem;
+  }
 
-    #public-search {
-      width: 100%;
-      border: 0px;
-      border-bottom: 1px solid $light-gray;
-      border-radius: 0px;
+  #public-search {
+    width: 100%;
+    border: 0px;
+    border-bottom: 1px solid $light-gray;
+    border-radius: 0px;
 
-      &:focus {
-        border-color: $blue;
-      }
+    &:focus {
+      border-color: $blue;
     }
   }
 }

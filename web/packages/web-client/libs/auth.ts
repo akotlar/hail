@@ -27,6 +27,7 @@ export interface TokenInterface {
 
     logout(): void;
     getToken(): any;
+    refreshIdTokenAsync(): Promise<(string | TokenType)[]>;
     setTokenFromJSON(token: {
         [token_name: string]: string
     }): void;
@@ -98,6 +99,7 @@ class Tokens implements TokenInterface {
 
             this.decodedToken = decoded;
             this.token = token[this.name];
+            console.info("setting");
             callbacks.call(loggedInEventName, [this.decodedToken, this.token]);
         } catch (e) {
             console.error(e);
@@ -146,6 +148,8 @@ class Tokens implements TokenInterface {
             }
 
             this.setTokenFromJSON(response);
+
+            return [this.decodedToken, this.token];
         } catch (e) {
             console.error(e)
             return null;

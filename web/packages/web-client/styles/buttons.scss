@@ -11,8 +11,12 @@
 
     &.active,
     &:hover {
-      color: $devil-gray;
+      color: $gray;
     }
+  }
+
+  i.material-icons {
+    cursor: pointer;
   }
 
   button {
@@ -28,7 +32,7 @@
 
     &:focus,
     &:hover {
-      border-color: $devil-gray;
+      border-color: $gray;
     }
 
     &:disabled {
@@ -45,10 +49,14 @@
 
     &.icon-button {
       border-radius: 50%;
-      height: 50px;
+      height: 2.5rem;
+      padding: 0px;
+      width: 2.5rem;
     }
 
     &.red:not(:disabled) {
+      color: $light-red;
+      border-color: $light-red;
 
       &:hover,
       &:focus {

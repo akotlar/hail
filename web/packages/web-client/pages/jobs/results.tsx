@@ -2,7 +2,9 @@ import React from "react";
 import { removeCallback, JobType, addCallback } from "../../libs/jobTracker/jobTracker";
 import "styles/card.scss";
 import "styles/pages/public.scss";
+import "styles/pages/results.scss";
 import Fuse from 'fuse.js';
+
 // import 'react-use-gesture';
 // import DraggableList from '../../components/DraggableList';
 
@@ -135,10 +137,10 @@ class Jobs extends React.PureComponent {
 
     render() {
         return (
-            <div id='public-page' className='centered'>
+            <div id='public-page' >
                 {/* <div id='click-handler' onClick={(e) => this.handleClick(e, -1)} style={{ width: '100%' }}></div> */}
 
-                <span className='right'>
+                <span id='right-list' className='centered list'>
                     <input id='public-search' className='outlined' type='text' placeholder='search' onChange={(e) => this.filterList(e)} />
                     <span id='control-center'>
                         <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
@@ -148,32 +150,34 @@ class Jobs extends React.PureComponent {
                         </button>
                         <div>{this.state.jobsSelected[0] === -1 ? 0 : (this.state.jobsSelected[1] == this.state.jobsSelected[0] ? 1 : this.state.jobsSelected[1] - this.state.jobsSelected[0] + 1)} selected</div>
                     </span>
-                    {/* <DraggableList items={this.state.filteredJobs} /> */}
-                    {this.state.filteredJobs.map((job, idx) =>
-                        <div key={idx} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} onClick={(e) => this.handleClick(e, idx)} >
-                            <h5 className='header'>{job.name}</h5>
-                            <div className='content'>
-                                <div className='row'>
-                                    <span className='left'>Created on:</span>
-                                    <b className='right'>{job.createdAt}</b>
-                                </div>
-                                <div className='row'>
-                                    <span className='left'>Assembly</span>
-                                    <b className='right'>{job.assembly}</b>
-                                </div>
-                                <div className='row'>
-                                    <span className='left'>{job.type == 'annotation' ? "Input:" : "Query:"}</span>
-                                    <b className='right'>
-                                        {
-                                            job.type == 'annotation'
-                                                ? <a href={job.inputFileName}>{job.inputFileName}</a>
-                                                : "Some query"
-                                        }
-                                    </b>
+                    <span className='job-list'>
+                        {/* <DraggableList items={this.state.filteredJobs} /> */}
+                        {this.state.filteredJobs.map((job, idx) =>
+                            <div key={idx} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} onClick={(e) => this.handleClick(e, idx)} >
+                                <h5 className='header'>{job.name}</h5>
+                                <div className='content'>
+                                    <div className='row'>
+                                        <span className='left'>Created on:</span>
+                                        <b className='right'>{job.createdAt}</b>
+                                    </div>
+                                    <div className='row'>
+                                        <span className='left'>Assembly</span>
+                                        <b className='right'>{job.assembly}</b>
+                                    </div>
+                                    <div className='row'>
+                                        <span className='left'>{job.type == 'annotation' ? "Input:" : "Query:"}</span>
+                                        <b className='right'>
+                                            {
+                                                job.type == 'annotation'
+                                                    ? <a href={job.inputFileName}>{job.inputFileName}</a>
+                                                    : "Some query"
+                                            }
+                                        </b>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </span>
                 </span>
             </div >
         );

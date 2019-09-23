@@ -5,7 +5,6 @@ const withPurgeCss = require('next-purgecss');
 const withCss = require('@zeit/next-css');
 const withSass = require('@zeit/next-sass');
 const withSize = require('next-size');
-const path = require('path');
 
 function disableCacheDirectory(config) {
   config.module.rules
@@ -16,6 +15,7 @@ function disableCacheDirectory(config) {
 }
 
 const publicRuntimeConfig = {
+  DEVELOPMENT: process.env.development,
   API: {
     BASE_URL: process.env.API_BASE_URL
   },
