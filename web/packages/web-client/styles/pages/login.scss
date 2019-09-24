@@ -1,14 +1,8 @@
-@import '../variables/colors.scss';
-@import '../variables/margins.scss';
+@import '../variables.scss';
 
 #theme-site {
   #login-page {
     flex-direction: column;
-
-
-    h3 {
-      margin-bottom: $margin;
-    }
 
 
     #login-choices {

@@ -1,5 +1,5 @@
-@import '../variables/colors.scss';
-@import '../variables/margins.scss';
+@import '../variables.scss';
+
 #theme-site {
   #scorecard {
     display: flex;
@@ -9,30 +9,38 @@
     justify-content: flex-start;
     align-content: flex-start;
     overflow: scroll;
+
     .issues-section {
       display: flex;
       flex-direction: column;
       align-items: flex-start;
       width: 100%;
+
       &:nth-child(n + 2) {
         margin-top: $margin * 2;
       }
+
       flex: 1 0 auto;
     }
+
     .deemph {
       color: $light-gray;
     }
+
     .emph {
       color: $red;
     }
+
     table {
       width: 100%;
       margin-top: $margin;
     }
+
     tr {
       display: table-row;
       outline: none;
       height: 30px;
+
       a {
         &:not(:last-child) {
           &:after {
@@ -40,10 +48,12 @@
           }
         }
       }
+
       td {
         padding-right: $margin;
       }
     }
+
     th {
       color: inherit;
       font-size: 0.75rem;
@@ -54,15 +64,18 @@
       vertical-align: inherit;
       padding-right: $margin;
     }
+
     #random-user {
       display: flex;
       flex-direction: row;
       align-items: center;
       justify-content: center;
       margin-top: $margin;
+
       img {
         cursor: pointer;
       }
+
       span {
         margin-left: $margin;
       }

@@ -1,4 +1,4 @@
-@import './variables/colors.scss';
+@import './variables.scss';
 
 #theme-site {
   input {
@@ -7,6 +7,15 @@
     border-bottom: 1px solid $light-gray;
     // border-radius: 3px;
     appearance: none;
+    width: 100%;
+  }
+
+  .input-container {
+    margin: 18px 0;
+
+    +.input-container {
+      margin-top: 0px;
+    }
   }
 
   input:focus {

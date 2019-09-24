@@ -9,11 +9,11 @@ const index = memo(() => (
         Bystro
       </a>
     </h1>
-    <div className="subtitle">Simplified genomics</div>
+    <div className="subheader">Simplified genomics</div>
 
-    <p>
+    <div className="subheader">
       <DefaultView />
-    </p>
+    </div>
   </div >
 ));
 

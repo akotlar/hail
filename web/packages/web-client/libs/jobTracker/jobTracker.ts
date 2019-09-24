@@ -63,10 +63,13 @@ const clearData = () => {
   }
 }
 
-export function addCallback(type: string, action: (data: JobType[]) => void): number {
+export function addCallback(type: string, action: (data: JobType[]) => void, triggerOnAddition: boolean = true): number {
   const id = callbacks.add(type, action);
 
-  action(data[type]);
+  if (triggerOnAddition) {
+    action(data[type]);
+  }
+
 
   return id;
 };
@@ -103,10 +106,14 @@ async function _preload(token?: string) {
         headers: {
           'Authorization': 'Bearer ' + token,
         }
-      })
-        .then(r => r.json());
+      }).then(r => r.json());
 
       data[obj[0]] = resData;
+      for (let job of resData) {
+        data[job._id] = job;
+      }
+
+      console.info("all", data['all'])
       callbacks.call(obj[0], data[obj[0]]);
     } catch (e) {
       console.warn(e);
@@ -126,5 +133,4 @@ export function init() {
   addAuthCallback(loggedOutEventName, () => {
     clearData();
   });
-
 }

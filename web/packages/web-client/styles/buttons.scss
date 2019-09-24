@@ -1,4 +1,4 @@
-@import './variables/colors.scss';
+@import './variables.scss';
 
 #theme-site {
 
@@ -17,7 +17,20 @@
 
   i.material-icons {
     cursor: pointer;
+    font-size: 1.725rem;
+    line-height: 0;
+    margin-top: .75rem;
+
+    &.rotate-180 {
+      transform: rotate(180deg);
+    }
+
+    &.rotate-90 {
+      transform: rotate(90deg);
+    }
   }
+
+
 
   button {
     outline: none;
@@ -50,8 +63,18 @@
     &.icon-button {
       border-radius: 50%;
       height: 2.5rem;
-      padding: 0px;
+      padding: .5rem 0px;
+      line-height: .85;
+      border: none;
       width: 2.5rem;
+
+      &:hover {
+        background: $lightest-gray;
+      }
+
+      &:active {
+        background: $light-gray;
+      }
     }
 
     &.red:not(:disabled) {

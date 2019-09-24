@@ -1,5 +1,4 @@
-@import 'variables/typeography.scss';
-@import 'variables/colors.scss';
+@import 'variables.scss';
 
 html {
   font-size: 16px;
@@ -9,14 +8,6 @@ html {
   font-family: 'Raleway', 'Helvetica', 'Arial', 'sans-serif';
   font-weight: $weight-normal;
   font-size: 0.875rem;
-
-  .subheader {
-    font-weight: $weight-medium;
-  }
-
-  .material-icons {
-    font-size: 1.725rem;
-  }
 
   a {
     color: $light-blue;
@@ -44,23 +35,29 @@ html {
   h6 {
     margin: 0px;
     font-weight: $weight-normal;
+    line-height: 1;
   }
 
   h1 {
     font-weight: $weight-light;
-    font-size: 3.5rem;
+    font-size: 4.5rem;
+    margin-left: -5px;
   }
 
   h2 {
     font-size: 2.875rem;
+    margin-left: -3px;
+    margin-top: -6px;
   }
 
   h3 {
     font-size: 2.125rem;
+    margin-left: -2px;
   }
 
   h4 {
     font-size: 1.5rem;
+    margin-left: -1px;
   }
 
   h5 {
@@ -71,15 +68,20 @@ html {
     font-size: 1rem;
   }
 
-  .subtitle-1 {
-    font-size: .8125rem;
-    letter-spacing: 0.15;
+  .subheader {
+    margin-top: $margin;
+    font-weight: $weight-medium;
   }
 
-  .subtitle-2 {
-    font-size: .75rem;
-    font-size: $weight-medium;
-  }
+  // .subtitle-1 {
+  //   font-size: .8125rem;
+  //   letter-spacing: 0.15;
+  // }
+
+  // .subtitle-2 {
+  //   font-size: .75rem;
+  //   font-size: $weight-medium;
+  // }
 
   &.dark {
     color: $white;

@@ -117,10 +117,14 @@ class Login extends PureComponent<LoginProps> {
     return (
       <div id='login-page' className='centered'>
         <div className='card shadow1'>
-          <div className='header'><h4>Log In</h4></div>
+          <div className='header'><h2>Log In</h2></div>
           <form className='content' onSubmit={this.handleSubmit}>
-            <input type='text' placeholder='email' ref={this.state.email} value='seqantpaper@gmail.com' />
-            <input type='password' placeholder='password' ref={this.state.password} value='seqantgenetics' />
+            <div className='input-container'>
+              <input type='text' placeholder='email' ref={this.state.email} value='seqantpaper@gmail.com' />
+            </div>
+            <div className='input-container'>
+              <input type='password' placeholder='password' ref={this.state.password} value='seqantgenetics' />
+            </div>
             <div className='row' style={{ marginTop: '10px', alignItems: 'center', justifyContent: 'center' }}>
               <button >Log In</button>
               <a href='#' style={{ marginLeft: '1rem' }}>Sign up</a>
