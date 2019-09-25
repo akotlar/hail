@@ -32,7 +32,6 @@ class GenomeSelector extends PureComponent<Props> {
         this.state.assemblies = props.assemblies;
         this.state.selectedSpecie = props.species[0];
         this.state.species = props.species;
-        // console.info("species", this.state.species);
         this.state.cb = props.onSelected;
 
         // this.state.inputStage = props.inputStage;

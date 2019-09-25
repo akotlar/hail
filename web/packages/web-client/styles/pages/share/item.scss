@@ -2,6 +2,8 @@
 
 #theme-site {
     #anayses-item-page {
+        width: 100%;
+
         ol {
             display: flex;
             align-items: center;
@@ -43,13 +45,13 @@
             display: flex;
             align-items: center;
             position: relative;
+            justify-content: space-between;
+            position: relative;
 
             .analysis-item {
 
                 &.before {
-                    position: absolute;
-                    left: -550px;
-                    width: 250px;
+
 
                     +.analysis-item:before {
                         content: "";
@@ -63,9 +65,7 @@
                 }
 
                 +.analysis-item.after {
-                    position: absolute;
-                    right: -550px;
-                    width: 250px;
+
 
                     &:before {
                         content: "";

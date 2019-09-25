@@ -187,13 +187,17 @@ class Item extends PureComponent {
                             <div className='analysis-item before'>
                                 <div className='card shadow1' style={{ cursor: 'default' }}>
                                     <div className='header column'>
-                                        <h4>{this.state.jobSelectedEasy['name']}</h4>
+                                        <h4>GATK Best Practices</h4>
                                         <div className='subheader'>
-                                            {this.state.jobSelectedEasy['description']}
+                                            Fastq -> VCF
                                         </div>
                                     </div>
                                 </div>
                             </div>
+
+                            <i className="material-icons">
+                                arrow_right_alt
+                            </i>
 
                             <div className='analysis-item'>
                                 <div className='row' style={{ marginTop: 0, display: 'flex' }}>
@@ -216,7 +220,7 @@ class Item extends PureComponent {
                                             </div>
                                         </span>
                                     </div>
-                                    <span id='header-details' className="column" style={{ marginRight: -16 }}>
+                                    <span id='header-details' className="column" style={{ marginRight: -16, alignSelf: 'flex-start' }}>
                                         <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
                                             <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
 
@@ -269,6 +273,9 @@ class Item extends PureComponent {
                                     </div>
                                 </span>
                             </div>
+                            <i className="material-icons">
+                                arrow_right_alt
+                            </i>
                             <div className='analysis-item after'>
                                 <div className='card shadow1' style={{ cursor: 'default' }}>
                                     <div className='header column'>
@@ -287,9 +294,9 @@ class Item extends PureComponent {
                             <div className='row' style={{ marginTop: 0, display: 'flex' }}>
 
                                 <div style={{ marginBottom: 30, display: 'flex', padding: 3, flexDirection: 'column' }}>
-                                    <h2>{this.state.jobSelectedEasy['name']}</h2>
+                                    <h2>Bystro -> Hail</h2>
                                     <div className='subheader'>
-                                        {this.state.jobSelectedEasy['description']}
+                                        Generates a Hail Matrix Table
                                     </div>
                                     <span style={{ display: this.state.expanded ? "initial" : "none" }}>
 
@@ -304,7 +311,7 @@ class Item extends PureComponent {
                                         </div>
                                     </span>
                                 </div>
-                                <span id='header-details' className="column" style={{ marginRight: -16 }}>
+                                <span id='header-details' className="column" style={{ marginRight: -16, alignSelf: 'flex-start' }}>
                                     <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
                                         <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
 
