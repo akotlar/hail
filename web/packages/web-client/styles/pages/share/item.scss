@@ -30,5 +30,59 @@
             border-bottom: 1px solid $black;
             border-radius: 0px;
         }
+
+        .row {
+            display: -webkit-box;
+            display: -ms-flexbox;
+            align-items: center;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        #analysis-chain {
+            display: flex;
+            align-items: center;
+            position: relative;
+
+            .analysis-item {
+
+                &.before {
+                    position: absolute;
+                    left: -550px;
+                    width: 250px;
+
+                    +.analysis-item:before {
+                        content: "";
+                        width: 200px;
+                        height: 1px;
+                        position: absolute;
+                        left: -250px;
+                        top: 50%;
+                        border: 1px solid #d4d4d4;
+                    }
+                }
+
+                +.analysis-item.after {
+                    position: absolute;
+                    right: -550px;
+                    width: 250px;
+
+                    &:before {
+                        content: "";
+                        width: 200px;
+                        height: 1px;
+                        position: absolute;
+                        left: -250px;
+                        top: 50%;
+                        border: 1px solid #d4d4d4;
+                    }
+
+                }
+
+
+            }
+        }
+
+
     }
 }

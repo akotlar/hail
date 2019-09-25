@@ -57,8 +57,10 @@ for (const key in data) {
 }
 
 const clearData = () => {
+  console.info('data', data);
   for (const key in data) {
     data[key] = [];
+    console.info('calling', key)
     callbacks.call(key, data[key]);
   }
 }
@@ -109,11 +111,11 @@ async function _preload(token?: string) {
       }).then(r => r.json());
 
       data[obj[0]] = resData;
-      for (let job of resData) {
-        data[job._id] = job;
-      }
+      // for (let job of resData) {
+      //   data[job._id] = job;
+      // }
 
-      console.info("all", data['all'])
+      console.info("all", data['all'], "adding callback for", obj[0])
       callbacks.call(obj[0], data[obj[0]]);
     } catch (e) {
       console.warn(e);

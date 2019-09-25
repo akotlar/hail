@@ -62,6 +62,7 @@
     "react-beautiful-dnd": "^11.0.5",
     "react-click-away-listener": "^0.3.0",
     "react-dom": "^16.9.0",
+    "react-dropzone": "^10.1.9",
     "react-final-form": "^6.3.0",
     "react-motion": "^0.5.2",
     "react-select": "^3.0.4",

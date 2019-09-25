@@ -459,4 +459,4 @@
 
 // export default withRouter(Jobs);
 
-export default "HELLO";
+export default () => <div>Hello</div>

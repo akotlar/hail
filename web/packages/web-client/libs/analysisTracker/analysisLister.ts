@@ -8,13 +8,19 @@ const available = [
         name: "Bystro Annotation",
         description: "Annotate and index for search",
         author: "Alex Kotlar",
-        authorGithubLink: "https://github.com/akotlar/bystro",
+        authorUrl: "https://github.com/akotlar/bystro",
         githubLink: "https://github.com/akotlar/bystro",
         dockerUrl: "https://dockerhub.com/whatever",
         id: "0",
+        type: 'bystro',
+        citations: ["Nature", "Cell", "Blah"],
+        compatibleWith: {
+            4: true,
+            3: true
+        },
         inputs: {
             assembly: {
-                type: 'assembly',
+                type_category: 'assembly',
                 species: [
                     "Human"
                 ],
@@ -35,7 +41,12 @@ const available = [
                 // value, or a symlink which other tasks this comes from
                 value: null,
                 title: "Upload to Submit",
-                description: "Accepts vcf and snp files"
+                description: "N files for N submissions",
+                type_category: 'file',
+                accepted_extensions: ['vcf', 'snp'],
+                accepted_compression: ['gz'],
+                accepted_descriptions: ['a vcf file', 'a snp file'],
+                accepted_links: ['http://vcf.com', 'http://snp.com']
             }],
         },
         parameters: {
@@ -72,8 +83,15 @@ const available = [
         }]
     },
     {
-        "name": "Compatible with Bystro 1",
+        "name": "UKBB GWAS",
+        description: "Genome-wide association, bonferroni-corrected",
+        parameters: [{
+            name: "alpha",
+        }],
         id: "4",
+        author: "Tim Poterba",
+        type: 'hail',
+        citations: ["Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah"],
         inputs: {
             "bystro": [{
                 name: "some file",
@@ -92,8 +110,11 @@ const available = [
         reviews: [{ rating: 1, name: "Alex", review: "Great" }, { rating: 1, name: "Alex", review: "Great" }]
     },
     {
-        "name": "My Cool thing VCF",
+        name: "PCA (Plink)",
         id: "1",
+        type: 'hail',
+        author: "Dan King",
+        citations: ["Nature", "Cell", "Blah"],
         inputs: {
             "vcf": [{
                 name: "My cool file",
@@ -112,8 +133,10 @@ const available = [
 
     },
     {
-        "name": "My Cool thing MatrixTable",
+        "name": "VCF To Matrix Table",
         id: "2",
+        type: 'hail',
+        citations: ["Nature", "Cell", "Blah"],
         inputs: {
             "MatrixTable": [{
                 name: "some file",
@@ -131,8 +154,10 @@ const available = [
 
     },
     {
-        "name": "My Cool thing Table",
+        name: "Bystro To Matrix Table",
         id: "3",
+        type: 'hail',
+        citations: ["Nature", "Cell", "Blah"],
         inputs: {
             "Table": [{
                 name: "some file",

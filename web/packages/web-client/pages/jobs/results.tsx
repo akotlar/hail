@@ -140,16 +140,32 @@ class Jobs extends React.PureComponent {
             <div id='public-page' >
                 {/* <div id='click-handler' onClick={(e) => this.handleClick(e, -1)} style={{ width: '100%' }}></div> */}
 
-                <span id='right-list' className='centered list'>
-                    <input id='public-search' className='outlined' type='text' placeholder='search' onChange={(e) => this.filterList(e)} />
+                <span id='right-list' className='list'>
                     <span id='control-center'>
+                        <input id='public-search' className='outlined' type='text' placeholder='Search results' onChange={(e) => this.filterList(e)} />
+                        {/* <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
+                            <i className='material-icons left'>
+                                delete_outline
+                        </i>
+                        </button> */}
+
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
+                            <i className='material-icons left'>
+                                delete_outline
+                        </i>
+                        </button>
+                        <div style={{ marginLeft: '.75rem' }}>{this.state.jobsSelected[0] === -1 ? 0 : (this.state.jobsSelected[1] == this.state.jobsSelected[0] ? 1 : this.state.jobsSelected[1] - this.state.jobsSelected[0] + 1)} selected</div>
+                    </span>
+                    {/* <span id='control-center'>
                         <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
                             <i className='material-icons left'>
                                 delete_outline
                         </i>
                         </button>
                         <div>{this.state.jobsSelected[0] === -1 ? 0 : (this.state.jobsSelected[1] == this.state.jobsSelected[0] ? 1 : this.state.jobsSelected[1] - this.state.jobsSelected[0] + 1)} selected</div>
-                    </span>
+                    </span> */}
                     <span className='job-list'>
                         {/* <DraggableList items={this.state.filteredJobs} /> */}
                         {this.state.filteredJobs.map((job, idx) =>

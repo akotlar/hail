@@ -7,6 +7,7 @@ export default class Callbacks {
   }
 
   add = (type: string, action: (data?: any) => void) => {
+    console.info('added');
     if (!this._callbacks[type]) {
       this._callbacks[type] = [];
     }

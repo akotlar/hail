@@ -5,6 +5,7 @@ import "styles/pages/public.scss";
 import Fuse from 'fuse.js';
 import Router, { withRouter } from 'next/router';
 import data from '../libs/analysisTracker/analysisLister';
+// import { daaddta } from '../libs/analysisTracker/analysisBuilder';
 // import ClickAwayListener from 'react-click-away-listener';
 // import '@material/slider/';
 // import Card, {
@@ -15,7 +16,7 @@ import data from '../libs/analysisTracker/analysisLister';
 //   CardActionIcons
 // } from "@material/react-card";
 // import { MDCSlider } from '@material/slider';
-import Slider from '@material-ui/core/Slider';
+// import Slider from '@material-ui/core/Slider';
 
 // if (MDCSlider) {
 //   console.info('got it')
@@ -39,6 +40,8 @@ declare type state = {
   filteredJobs: any[];
   compatibleJobs: any[];
   jobSelected: number;
+  expanded: {};
+  referrer: number;
 };
 
 class Jobs extends PureComponent {
@@ -51,6 +54,8 @@ class Jobs extends PureComponent {
     filteredJobs: data.analysesArray,
     compatibleJobs: [],
     jobSelected: null,
+    expanded: {},
+    referrer: null,
   };
 
   _callbackId?: number = null;
@@ -60,13 +65,18 @@ class Jobs extends PureComponent {
   jobType = 'completed'
 
   static async getInitialProps({ query }: any) {
+    const referrer = typeof query.referrer === 'undefined' ? null : query.referrer;
+
     return {
-      type: query.type
+      referrer
     };
   }
 
   constructor(props: any) {
     super(props);
+
+    // this.state.type = query.type;
+    this.state.referrer = props.referrer;
   }
 
   handleChange = selectedOption => {
@@ -119,6 +129,12 @@ class Jobs extends PureComponent {
 
   componentDidUpdate(prevProps) {
     const { query } = (this.props as any).router
+
+    const referrer = typeof query.referrer === 'undefined' ? null : query.referrer;
+
+    this.setState(() => ({
+      referrer
+    }));
     // verify props have changed to avoid an infinite loop
     if (query.id !== prevProps.router.query.id) {
       // fetch data based on the new query
@@ -199,8 +215,6 @@ class Jobs extends PureComponent {
       }
     });
 
-    console.info("keys", res);
-
     let newCompatible = this.state.jobs.filter((job, jIdx) => {
       if (jIdx == idx) {
         return false;
@@ -225,7 +239,8 @@ class Jobs extends PureComponent {
     // this.setState({ jobSelected: job })
     event.preventDefault();
     console.info("id")
-    Router.push(`/share/item?id=${job.id}`, `/share/item?id=${job.id}`, { shallow: false })
+
+    Router.push(`/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, `/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, { shallow: false })
     console.log(event.target, event.currentTarget);
     // Router.push(`/share/item?${job.id}`, `/share/item?id=${job.id}`, { shallow: true })
   }
@@ -250,6 +265,25 @@ class Jobs extends PureComponent {
         jobsSelected: [-1, -1]
       }));
     }
+  }
+
+  handleDetailClick = (e: any, job) => {
+    e.stopPropagation()
+
+    console.info("e", e.target, job.id);
+
+    this.setState((old: state) => {
+      // Mutating old directly prevents reconciler from seeing the change
+      const expanded = Object.assign({}, old.expanded);
+
+      expanded[job.id] = !expanded[job.id];
+      console.info('tis', expanded);
+      return {
+        expanded
+      }
+    });
+
+
   }
 
   render() {
@@ -300,7 +334,7 @@ class Jobs extends PureComponent {
 
             </span>
             <span className='job-list'>
-              <Slider
+              {/* <Slider
                 defaultValue={30}
                 // getAriaValueText={valuetext}
                 aria-labelledby="discrete-slider"
@@ -309,26 +343,26 @@ class Jobs extends PureComponent {
                 marks
                 min={10}
                 max={110}
-              />
+              /> */}
               {this.state.filteredJobs.map((job, idx) =>
                 <div key={idx} onClick={(e) => this.selectJob(e, job)} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} >
-                  <div className='header'>
-                    <h5>{job.name}</h5>
-                    <i className="material-icons">
-                      edit
-                  </i>
+                  <div className='header column'>
+                    <h3>{job.name}</h3>
+                    <div className='subheader'>
+                      {job.description}
+                    </div>
+                    <div className='subheader'>
+                      By <a className='right' href={job.authorUrl}>{job.author}</a>
+                    </div>
                   </div>
                   <div className='content'>
-                    <div className='row'>
-                      <span className='left'>Created on:</span>
-                      <b className='right'>{job.name}</b>
-                    </div>
-                    <div className='row'>
-                      <h5 className='left'>Inputs</h5>
+
+                    {/* <div className='row'>
+                      <h6 className='left'>Inputs</h6>
                       {Object.entries(job.inputs).map(val => {
                         <b className='right'>{val[0]}</b>
                       })}
-                    </div>
+                    </div> */}
                     {/* <div className='row'>
                   <span className='left'>{job.type == 'annotation' ? "Input:" : "Query:"}</span>
                   <b className='right'>
@@ -341,11 +375,17 @@ class Jobs extends PureComponent {
                 </div> */}
                   </div>
                   <div className='content footer'>
-                    <button className='icon-button' style={{ alignSelf: 'flex-end' }}>
-                      <i className="material-icons">
-                        keyboard_arrow_down
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <a href='#'><b>{job.citations.length} citations</b></a>
+                      <button className={`icon-button`} style={{ alignSelf: 'flex-end' }} onClick={(e) => this.handleDetailClick(e, job)}>
+                        <i className={`material-icons ${this.state.expanded[job.id] ? 'rotate-180' : ''}`}>
+                          keyboard_arrow_down
                       </i>
-                    </button>
+                      </button>
+                    </span>
+                    <div className='content' style={{ display: this.state.expanded[job.id] ? 'block' : 'none' }}>
+                      Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
+                    </div>
                   </div>
                 </div>
               )}
