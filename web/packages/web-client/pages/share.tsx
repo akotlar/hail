@@ -39,9 +39,9 @@ declare type state = {
   jobsSelected: [number, number]
   filteredJobs: any[];
   compatibleJobs: any[];
-  jobSelected: number;
+  // jobSelected: number;
   expanded: {};
-  referrer: number;
+  // referrer: number;
 };
 
 class Jobs extends PureComponent {
@@ -53,22 +53,24 @@ class Jobs extends PureComponent {
     jobsSelected: [-1, -1],
     filteredJobs: data.analysesArray,
     compatibleJobs: [],
-    jobSelected: null,
+    // jobSelected: null,
     expanded: {},
-    referrer: null,
+    // referrer: null,
   };
 
   _callbackId?: number = null;
 
-  fuse?: any = null
+  query?: any;
+
+  fuse?: any;
 
   jobType = 'completed'
 
   static async getInitialProps({ query }: any) {
-    const referrer = typeof query.referrer === 'undefined' ? null : query.referrer;
+    // const referrer = typeof query.referrer === 'undefined' ? null : query.referrer;
 
     return {
-      referrer
+      query
     };
   }
 
@@ -76,7 +78,7 @@ class Jobs extends PureComponent {
     super(props);
 
     // this.state.type = query.type;
-    this.state.referrer = props.referrer;
+    this.query = props.query;
   }
 
   handleChange = selectedOption => {
@@ -127,74 +129,18 @@ class Jobs extends PureComponent {
     // removeCallback(this.jobType, this._callbackId);
   }
 
-  componentDidUpdate(prevProps) {
+  componentDidUpdate() {
     const { query } = (this.props as any).router
+    this.query = query;
 
-    const referrer = typeof query.referrer === 'undefined' ? null : query.referrer;
-
-    this.setState(() => ({
-      referrer
-    }));
-    // verify props have changed to avoid an infinite loop
-    if (query.id !== prevProps.router.query.id) {
-      // fetch data based on the new query
-      console.info("id", query.id);
-      this.setState(() => ({
-        jobSelected: typeof query.id === 'undefined' ? null : data.analysesArray[query.id]
-      }))
-    }
+    // // verify props have changed to avoid an infinite loop
+    // if (query.id !== prevProps.router.query.id) {
+    //   // fetch data based on the new query
+    //   this.setState(() => ({
+    //     jobSelected: typeof query.id === 'undefined' ? null : data.analysesArray[query.id]
+    //   }))
+    // }
   }
-
-  // handleClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>, idx: number) => {
-  //   e.preventDefault();
-
-  //   // e.stopPropagation();
-  //   // e.nativeEvent.stopImmediatePropagation();
-  //   if (e.shiftKey) {
-  //     let [min, max] = this.state.jobsSelected;
-
-  //     if (idx > min) {
-  //       max = idx;
-  //     } else if (idx == min) {
-  //       min = idx;
-  //       max = idx;
-  //     } else if (idx > min) {
-  //       max = idx;
-  //     } else {
-  //       min = idx;
-  //     }
-
-  //     this.setState(() => ({
-  //       jobsSelected: [min, max],
-  //     }))
-
-  //     return;
-  //   }
-
-
-
-  //   this.setState((old: state) => {
-  //     const [old_min, old_max] = old.jobsSelected;
-
-  //     if (old_min == idx && old_max == idx) {
-  //       return {
-  //         jobsSelected: [-1, -1],
-  //         compatibleJobs: [],
-  //       }
-  //     }
-
-  //     const compatible = this.getCompatible(idx);
-
-  //     return {
-  //       jobsSelected: [idx, idx],
-  //       filteredJobs: [available[idx]],
-  //       compatibleJobs: compatible,
-  //     }
-  //   })
-
-  //   // Router.push('/share?id=1', '/share?id=1', { shallow: true })
-
-  // }
 
   getCompatible: (idx: number) => any[] = (idx) => {
     let job = this.state.jobs[idx];
@@ -240,7 +186,15 @@ class Jobs extends PureComponent {
     event.preventDefault();
     console.info("id")
 
-    Router.push(`/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, `/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, { shallow: false })
+    Router.push({
+      pathname: '/share/item',
+      query: {
+        id: job.id,
+        ...this.query
+      }
+    });
+
+    // Router.push(`/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, `/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, { shallow: false })
     console.log(event.target, event.currentTarget);
     // Router.push(`/share/item?${job.id}`, `/share/item?id=${job.id}`, { shallow: true })
   }

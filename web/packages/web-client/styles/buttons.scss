@@ -3,16 +3,22 @@
 #theme-site {
 
   a,
-  .link-button,
-  button {
+  .link-button {
     color: $black;
     cursor: pointer;
     text-decoration: none;
+
 
     &.active,
     &:hover {
       color: $gray;
     }
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   i.material-icons {
@@ -23,6 +29,7 @@
 
     &.rotate-180 {
       transform: rotate(180deg);
+      margin-top: -2px;
     }
 
     &.rotate-90 {

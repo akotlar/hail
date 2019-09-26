@@ -4,8 +4,8 @@ import "styles/card.scss";
 import "styles/pages/public.scss";
 import "styles/pages/share/item.scss"
 import GenomeSelector from '../../components/GenomeSelector/GenomeSelector';
-// import analysisBuilder, {addNode, removeNode} from '../../libs/analysisTracker/analysisBuilder';
-// s
+import built, { getNode, addNode } from '../../libs/analysisTracker/analysisBuilder';
+import SanitizeHtml from '../../components/SanitizeHtml';
 import Router, { withRouter } from 'next/router';
 
 type easy = {
@@ -17,16 +17,25 @@ type easy = {
     outputs: [],
     rating: number,
     reviews: [],
+    hasConfiguration: boolean,
 }
 declare type state = {
     jobSelected: {};
     jobSelectedEasy?: easy;
+    currentNode?: any;
+    prevNode?: any;
+    nextNode?: any;
     expanded: boolean;
     inputStageIdx: number;
     speciesChosen?: string,
     assemblyChosen?: string,
     showAll: boolean
 };
+
+enum link_type_enum {
+    input = 1,
+    output,
+}
 
 const getItems = (job: {}): {} => {
     const inputs = [];
@@ -69,6 +78,9 @@ class Item extends PureComponent {
     state: state = {
         jobSelected: {},
         jobSelectedEasy: null,
+        currentNode: null,
+        prevNode: null,
+        nextNode: null,
         expanded: false,
         inputStageIdx: 0,
         showAll: false
@@ -88,17 +100,26 @@ class Item extends PureComponent {
 
     constructor(props: any) {
         super(props);
+        if (getNode(0) === null) {
+            console.info('none')
+        }
 
+        // const idx = addNode({
+        //     data: data[props.id]
+        // });
+
+        // const item = getNode(idx);
+
+        // this.set()
         // this.state.jobSelected = data.analyses[props.id];
     }
 
-    set = (data, id) => {
+    set = (data, id, referrer_idx?: number, link_type?: link_type_enum) => {
         if (!data) {
             console.info("Loding");
             return;
         }
 
-        console.info('id', id, this.props);
         const job = data[id];
 
         if (!job) {
@@ -107,15 +128,83 @@ class Item extends PureComponent {
         }
 
         const easyVersion = getItems(job);
+        console.info('easy,', easyVersion);
+        const [node, idx] = addNode({
+            data: easyVersion
+        }, referrer_idx);
+        console.info('after add', node, idx, typeof (idx));
+        let prevNode, nextNode, currentNode;
 
+        if (referrer_idx !== undefined) {
+            if (link_type === undefined) {
+                throw new Error("When referrer_idx is present, so must be link_type");
+            }
+            console.info('in', easyVersion);
+            if (easyVersion['hasConfiguration'] !== true) {
+                console.info("hasConfig", link_type, link_type == link_type_enum.input)
+                if (link_type == link_type_enum.input) {
+                    console.info('checking idx', idx, getNode(idx as number + 1));
+                    prevNode = node;
+                    currentNode = getNode(idx + 1);
+                    nextNode = getNode(idx + 2);
+                } else {
+                    nextNode = node;
+                    currentNode = getNode(idx - 1);
+                    nextNode = getNode(idx - 2);
+                }
+            }
+        } else {
+            prevNode = getNode(idx - 1);
+            currentNode = node;
+            nextNode = getNode(idx + 1);
+        }
+        console.info("trunk", built);
+        console.info("prev current next", prevNode, "curr", currentNode, "next", nextNode);
+        // if (referrer_idx !== undefined) {
+        //     if (link_type === undefined) {
+        //         throw new Error("When referrer_idx is present, so must be link_type");
+        //     }
+
+        //     // a url resource for instance
+        //     if (easyVersion['hasConfiguration'] !== true) {
+        //         if (link_type === link_type_enum.input) {
+        //             prevNode = node;
+        //             currentNode = getNode(idx + 1);
+        //             nextNode = getNode(idx + 2);
+        //         } else {
+        //             nextNode = node;
+        //             currentNode = getNode(idx - 1);
+        //             nextNode = getNode(idx - 2);
+        //         }
+        //     } else {
+
+        //     }
+        // }
+        // if (easyVersion['type'] === 'resource' && referrer_idx !== undefined) {
+        //     prevNode = node;
+        //     currentNode = getNode(referrer_idx);
+        // } else {
+        //     prevNode = getNode(idx - 1);
+        //     nextNode = getNode(idx + 1);
+        //     currentNode = node
+        // }
+
+        console.info('node', node, idx);
+
+        // const prevNode = getNode(idx - 1);
+        // const nextNode = getNode(idx + 1);
+        console.info('prev, next', prevNode, nextNode);
         this.setState(() => ({
             jobSelected: job,
-            jobSelectedEasy: easyVersion,
+            jobSelectedEasy: node['data'],
+            prevNode,
+            nextNode,
+            currentNode
         }));
     }
 
     componentDidMount() {
-        this._callbackId = addCallback(events.analyses, (data) => this.set(data, (this.props as any).router.query.id));
+        this._callbackId = addCallback(events.analyses, (data) => this.set(data, (this.props as any).router.query.id, (this.props as any).router.query.referrer, (this.props as any).router.query.link_type));
     }
 
 
@@ -127,7 +216,7 @@ class Item extends PureComponent {
         const { query } = (this.props as any).router
         // verify props have changed to avoid an infinite loop
         if (query.id !== prevProps.router.query.id) {
-            this.set(data.analyses, query.id);
+            this.set(data.analyses, query.id, query.referrer, query.link_type);
         }
 
         if (query.input_idx !== prevProps.router.query.input_idx) {
@@ -176,192 +265,132 @@ class Item extends PureComponent {
     //   </md-card-icon-actions>
     render() {
         return (
-            <div id='anayses-item-page' className='centered'>
+            <div id='anayses-item-page' className='centered l-flex'>
 
-                {!this.state.jobSelectedEasy ? <div>Loading</div> :
+                {!this.state.currentNode ? <div>Loading</div> :
                     <Fragment>
-                        <span id='analysis-chain' style={{ display: 'flex', alignItems: 'center' }}>
+                        <span id='analysis-chain' className='l-fg3' style={{ display: 'flex', alignItems: 'center' }}>
 
-
-
-                            <div className='analysis-item before'>
-                                <div className='card shadow1' style={{ cursor: 'default' }}>
-                                    <div className='header column'>
-                                        <h4>GATK Best Practices</h4>
-                                        <div className='subheader'>
-                                            Fastq -> VCF
+                            {this.state.prevNode &&
+                                <div className='side-item-wrap before' style={{ position: 'relative' }}>
+                                    <div className='analysis-item '>
+                                        <div className='card shadow1' style={{ cursor: 'default' }}>
+                                            <div className='header column'>
+                                                <h4>{this.state.prevNode.data.name}</h4>
+                                                <div className='subheader'>
+                                                    <SanitizeHtml html={this.state.prevNode.data.description} />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            <i className="material-icons">
-                                arrow_right_alt
-                            </i>
+                                    <i className='link'></i>
+                                </div> || <div className='spacer'></div>
+                            }
+                            <div className='center-item-wrap'>
+                                <div className='analysis-item'>
+                                    <div className='row header' style={{ marginTop: 0, display: 'flex' }}>
 
-                            <div className='analysis-item'>
-                                <div className='row' style={{ marginTop: 0, display: 'flex' }}>
+                                        <div style={{ marginBottom: 30, display: 'flex', padding: 3, flexDirection: 'column' }}>
+                                            <h2>{this.state.currentNode['data']['name']}</h2>
+                                            {this.state.currentNode['data']['description'] ? <div className='subheader'>
 
-                                    <div style={{ marginBottom: 30, display: 'flex', padding: 3, flexDirection: 'column' }}>
-                                        <h2>{this.state.jobSelectedEasy['name']}</h2>
-                                        <div className='subheader'>
-                                            {this.state.jobSelectedEasy['description']}
+                                                <SanitizeHtml html={this.state.currentNode['data']['description']} />
+                                            </div> : null}
+                                            <span style={{ display: this.state.expanded ? "initial" : "none" }}>
+
+                                                <div className='subheader'>
+                                                    By <a href={this.state.currentNode['data']['authorGithubLink']}><b>{this.state.currentNode['data']['author']}</b></a>
+                                                </div>
+                                                <div className='subheader'>
+                                                    <a href={this.state.currentNode['data']['githubLink']}><b>Project Github Link</b></a>
+                                                </div>
+                                                <div className='subheader'>
+                                                    <a href={this.state.currentNode['data']['dockerUrl']}><b>Dockerfile</b></a>
+                                                </div>
+                                            </span>
                                         </div>
-                                        <span style={{ display: this.state.expanded ? "initial" : "none" }}>
+                                        <span id='header-details' className="column" style={{ marginRight: -16, alignSelf: 'flex-start' }}>
+                                            <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
+                                                <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
 
-                                            <div className='subheader'>
-                                                By <a href={this.state.jobSelectedEasy['authorGithubLink']}><b>{this.state.jobSelectedEasy['author']}</b></a>
-                                            </div>
-                                            <div className='subheader'>
-                                                <a href={this.state.jobSelectedEasy['githubLink']}><b>Project Github Link</b></a>
-                                            </div>
-                                            <div className='subheader'>
-                                                <a href={this.state.jobSelectedEasy['dockerUrl']}><b>Dockerfile</b></a>
-                                            </div>
+                                            </button>
+
                                         </span>
                                     </div>
-                                    <span id='header-details' className="column" style={{ marginRight: -16, alignSelf: 'flex-start' }}>
-                                        <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
-                                            <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
 
-                                        </button>
 
+
+
+                                    <span style={{ display: 'flex', justifyContent: 'center' }}>
+
+                                        <div className='card shadow1' style={{ cursor: 'default' }}>
+
+
+
+                                            <div className='content' style={{ marginTop: 20 }}>
+                                                {
+                                                    !this.state.currentNode['data']['inputs'].length ? "No inputs" :
+                                                        this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['type_category'] === 'assembly' ? (
+                                                            (this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['value'] ? <div>Selected</div> :
+                                                                <GenomeSelector
+                                                                    species={this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['species'] as any}
+                                                                    assemblies={this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['assemblies']}
+                                                                    onSelected={(assembly) => this.handleInputSelected(this.state.inputStageIdx, assembly)}
+                                                                />)
+                                                        ) :
+                                                            this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['type_category'] === 'file' ? (
+                                                                <Fragment>
+                                                                    <div className='header column'>
+                                                                        <h3>{this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['title']}</h3>
+                                                                        <div className='subheader'>
+                                                                            <SanitizeHtml html={this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['description']} />
+                                                                        </div>
+
+                                                                    </div>
+                                                                    <div className='content' style={{ height: 100, width: 150, margin: "0 auto" }} >
+                                                                        <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
+                                                                            <i className="material-icons">
+                                                                                cloud_upload
+                                                            </i>
+                                                                            <span>or</span>
+                                                                            <i className="material-icons" onClick={() => Router.push(`/share?referrer=${this.state.currentNode.idx}&link_type=${link_type_enum.input}`)}>
+                                                                                link
+                                                        </i>
+                                                                        </div>
+                                                                    </div>
+                                                                </Fragment>
+                                                            ) : this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['type_category'] === 'url' ? (
+                                                                <Fragment>
+                                                                    <a href={this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['value']} target='_blank'>{this.state.currentNode['data']['inputs'][this.state.inputStageIdx]['name']}</a>
+
+                                                                </Fragment>
+                                                            ) : null
+
+                                                }
+
+                                            </div>
+                                        </div>
                                     </span>
                                 </div>
-
-
-
-                                <span style={{ display: 'flex', justifyContent: 'center' }}>
-
-                                    <div className='card shadow1' style={{ cursor: 'default' }}>
-
-
-
-                                        <div className='content' style={{ marginTop: 20 }}>
-                                            {
-                                                this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['type_category'] === 'assembly' ? (
-                                                    <GenomeSelector
-                                                        species={this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['species'] as any}
-                                                        assemblies={this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['assemblies']}
-                                                        onSelected={(assembly) => this.handleInputSelected(this.state.inputStageIdx, assembly)}
-                                                    />
-                                                ) :
-                                                    this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['type_category'] === 'file' ? (
-                                                        <Fragment>
-                                                            <div className='header column'>
-                                                                <h3>{this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['title']}</h3>
-                                                                <div className='subheader'>{this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['description']}</div>
-
-                                                            </div>
-                                                            <div className='content' style={{ height: 100, width: 150, margin: "0 auto" }} >
-                                                                <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
-                                                                    <i className="material-icons">
-                                                                        cloud_upload
-                                                            </i>
-                                                                    <span>or</span>
-                                                                    <i className="material-icons" onClick={() => Router.push(`/share?referrer=${this.state.jobSelectedEasy.id}`)}>
-                                                                        link
-                                                        </i>
-                                                                </div>
-                                                            </div>
-                                                        </Fragment>
-                                                    ) : null
-
-                                            }
-
+                            </div>
+                            {this.state.nextNode &&
+                                <div className='side-item-wrap after'>
+                                    <div className='analysis-item'>
+                                        <div className='card shadow1' style={{ cursor: 'default' }}>
+                                            <div className='header column'>
+                                                <h4>{this.state.nextNode.data.name}</h4>
+                                                <div className='subheader'>
+                                                    <SanitizeHtml html={this.state.nextNode.data.description} />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </span>
-                            </div>
-                            <i className="material-icons">
-                                arrow_right_alt
-                            </i>
-                            <div className='analysis-item after'>
-                                <div className='card shadow1' style={{ cursor: 'default' }}>
-                                    <div className='header column'>
-                                        <h4>{this.state.jobSelectedEasy['name']}</h4>
-                                        <div className='subheader'>
-                                            {this.state.jobSelectedEasy['description']}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+
+                                    <i className='link'></i>
+                                </div> || <div className='spacer'></div>
+                            }
                         </span>
-                        {/* <button style={{ marginTop: 50 }} onClick={() => this.setState((old: state) => ({ showAll: !old.showAll }))}>
-                            <h3>Compatible with:</h3>
-                        </button> */}
-                        <div className='analysis-item' style={{ marginTop: 100, marginBottom: -150, display: this.state.showAll ? 'initial' : 'none' }}>
-                            <div className='row' style={{ marginTop: 0, display: 'flex' }}>
-
-                                <div style={{ marginBottom: 30, display: 'flex', padding: 3, flexDirection: 'column' }}>
-                                    <h2>Bystro -> Hail</h2>
-                                    <div className='subheader'>
-                                        Generates a Hail Matrix Table
-                                    </div>
-                                    <span style={{ display: this.state.expanded ? "initial" : "none" }}>
-
-                                        <div className='subheader'>
-                                            By <a href={this.state.jobSelectedEasy['authorGithubLink']}><b>{this.state.jobSelectedEasy['author']}</b></a>
-                                        </div>
-                                        <div className='subheader'>
-                                            <a href={this.state.jobSelectedEasy['githubLink']}><b>Project Github Link</b></a>
-                                        </div>
-                                        <div className='subheader'>
-                                            <a href={this.state.jobSelectedEasy['dockerUrl']}><b>Dockerfile</b></a>
-                                        </div>
-                                    </span>
-                                </div>
-                                <span id='header-details' className="column" style={{ marginRight: -16, alignSelf: 'flex-start' }}>
-                                    <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
-                                        <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
-
-                                    </button>
-
-                                </span>
-                            </div>
-
-                            <span style={{ justifyContent: 'center', display: 'flex' }}>
-
-                                <div className='card shadow1' style={{ cursor: 'default' }}>
-
-
-
-                                    <div className='content' style={{ marginTop: 20 }}>
-                                        {
-                                            this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['type_category'] === 'assembly' ? (
-                                                <GenomeSelector
-                                                    species={this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['species'] as any}
-                                                    assemblies={this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['assemblies']}
-                                                    onSelected={(assembly) => this.handleInputSelected(this.state.inputStageIdx, assembly)}
-                                                />
-                                            ) :
-                                                this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['type_category'] === 'file' ? (
-                                                    <Fragment>
-                                                        <div className='header column'>
-                                                            <h3>{this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['title']}</h3>
-                                                            <div className='subheader'>{this.state.jobSelectedEasy['inputs'][this.state.inputStageIdx]['description']}</div>
-
-                                                        </div>
-                                                        <div className='content' style={{ height: 100, width: 150, margin: "0 auto" }} >
-                                                            <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
-                                                                <i className="material-icons">
-                                                                    cloud_upload
-                                                            </i>
-                                                                <span>or</span>
-                                                                <i className="material-icons" onClick={() => Router.push(`/share?referrer=${this.state.jobSelectedEasy.id}`)}>
-                                                                    link
-                                                        </i>
-                                                            </div>
-                                                        </div>
-                                                    </Fragment>
-                                                ) : null
-
-                                        }
-
-                                    </div>
-                                </div>
-                            </span>
-                        </div>
                     </Fragment >
 
 

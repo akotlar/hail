@@ -41,12 +41,10 @@ const available = [
                 // value, or a symlink which other tasks this comes from
                 value: null,
                 title: "Upload to Submit",
-                description: "N files for N submissions",
                 type_category: 'file',
-                accepted_extensions: ['vcf', 'snp'],
-                accepted_compression: ['gz'],
-                accepted_descriptions: ['a vcf file', 'a snp file'],
-                accepted_links: ['http://vcf.com', 'http://snp.com']
+                compressed_extensions: ['gz', 'bgz'],
+                accept_stdin: true,
+                description: `Accepts <a href='http://vcf.com' target='_blank'>VCF</a>`,
             }],
         },
         parameters: {
@@ -81,6 +79,35 @@ const available = [
         steps: [{
 
         }]
+    },
+    {
+        name: "Gnomad Exomes",
+        description: "Grabs gnomad.exomes",
+        author: "Alex Kotlar",
+        authorUrl: "https://github.com/akotlar/bystro",
+        githubLink: "https://github.com/akotlar/bystro",
+        dockerUrl: "https://dockerhub.com/whatever",
+        id: "7",
+        type: 'resource',
+        hasConfiguration: false,
+        citations: ["Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah"],
+        requires: ['stdin'],
+        inputs: {
+            vcf: [{
+                name: "Gnomad Exomes Chr1",
+                schema: { version: "2.11" },
+                // value, or a symlink which other tasks this comes from
+                value: 'https://storage.googleapis.com/gnomad-public/release/2.1.1/vcf/exomes/gnomad.exomes.r2.1.1.sites.1.vcf.bgz',
+                title: null,
+                description: `<span>Accepts <a href='http://vcf.com' target='_blank'>VCF</a></span>`,
+                type_category: 'url',
+            }],
+        },
+        parameters: {},
+        outputs: {
+            stdout: 1,
+        },
+        rating: 0.95,
     },
     {
         "name": "UKBB GWAS",
