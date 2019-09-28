@@ -60,6 +60,18 @@
             justify-content: space-between;
             position: relative;
 
+            .card {
+                cursor: pointer;
+            }
+
+            .side-item-wrap .header h4,
+            .side-item-wrap .subheader>* {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 200px;
+            }
+
             .link {
                 cursor: pointer;
                 font-size: 1.725rem;

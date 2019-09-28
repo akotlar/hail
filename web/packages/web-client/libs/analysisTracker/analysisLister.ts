@@ -23,6 +23,11 @@ import Callbacks from "../callbacks";
 // Should take seconds to run
 // And is required to publish to a "preview" channel
 // For the user's id, which is the topic
+
+// Publishing a V1 requires a review process
+// Publishing a V2 with modified settings requires no process
+// --- we'll need to group together multiple versions
+// Publishing a V2 htat has edited source code will incur an expedited review
 const available = [
     {
         name: "Bystro Annotation",
@@ -113,9 +118,7 @@ const available = [
         dockerUrl: "https://dockerhub.com/whatever",
         id: "7",
         type: 'resource',
-        hasConfiguration: false,
         citations: ["Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah"],
-        requires: ['stdin'],
         outputs: {
             "gnomad.exomes.r2.1.1.sites.1.vcf.bgz": {
                 name: "Gnomad Exomes Chr1",
@@ -128,8 +131,6 @@ const available = [
                 type: 'vcf',
             },
         },
-        parameters: {},
-        options: {},
         rating: 0.95,
     },
     {

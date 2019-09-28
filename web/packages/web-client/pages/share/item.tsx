@@ -130,6 +130,10 @@ function mergeInputToOutput(inputComponent, currentComponent): any {
 }
 
 function checkSetInputsCompleted(node) {
+    if (node['data']['inputs'] === undefined) {
+        return;
+    }
+
     let inner = node['data'];
     let allCompleted = true;
     if (inner['input_stage_idx'] != inner['input_order'].length) {
@@ -250,14 +254,14 @@ class Item extends PureComponent {
                 throw new Error("link_type must be defined when referrer_idx is defined");
             }
 
-            if (analysisComponent['hasConfiguration'] === false) {
+            if (analysisComponent['type'] === 'resource') {
                 if (link_type == link_type_enum.input) {
                     currentNodeIdx += 1;
 
                     needsMergeFromInputToCurrent = true;
 
                 } else {
-                    currentNodeIdx -= 1;
+                    throw new Error("Resources don't take inputs, cannot be targets");
                 }
             }
         }
@@ -286,6 +290,8 @@ class Item extends PureComponent {
                 }
             }
         }
+
+        // checkCompatible(currentNode);
         // console.info("trunk", built);
         console.info("prev", prevNode, getNode(0), "curr", currentNode, "next", nextNode);
 
@@ -403,7 +409,7 @@ class Item extends PureComponent {
                             {this.state.prevNode &&
                                 <div onClick={() => this.moveFocus(-1)} className={`side-item-wrap before ${this.state.hasMoreBefore ? 'more' : ''} ${this.state.highlightPrevious ? 'highlight' : ''}`} style={{ position: 'relative' }}>
                                     <div className='analysis-item'>
-                                        <div className='card shadow1' style={{ cursor: 'default' }}>
+                                        <div className='card shadow1 clickable'>
                                             <div className='header column'>
                                                 <h4>{this.state.prevNode.data.name}</h4>
                                                 <div className='subheader'>
@@ -417,10 +423,9 @@ class Item extends PureComponent {
                                     <i className='link'></i>
                                 </div> || (
 
-                                    this.state.currentNode['data']['inputs']
-                                    &&
+
                                     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                                        <button className='icon-button'
+                                        <button disabled={!this.state.currentNode['data']['inputs']} className='icon-button'
                                             onClick={() => Router.push({
                                                 pathname: '/share',
                                                 query: { referrer: this.state.currentNodeIdx, link_type: link_type_enum.input }
@@ -430,7 +435,7 @@ class Item extends PureComponent {
                                             </i>
                                         </button></div>
 
-                                    || <div> Terminal</div>
+
 
                                 )
 
@@ -476,7 +481,7 @@ class Item extends PureComponent {
 
                                     <span style={{ display: 'flex', justifyContent: 'center' }}>
 
-                                        <div className='card shadow1' style={{ cursor: 'default' }}>
+                                        <div className='card shadow1 clickable'>
 
 
 
@@ -556,7 +561,7 @@ class Item extends PureComponent {
                                 <div className={`side-item-wrap after ${this.state.hasMoreAfter ? 'more' : ''}`}>
                                     <i className='link'></i>
                                     <div className='analysis-item' onClick={() => this.moveFocus(1)} >
-                                        <div className='card shadow1' style={{ cursor: 'default' }}>
+                                        <div className='card shadow1 clickable'>
                                             <div className='header column'>
                                                 <h4>{this.state.nextNode.data.name}</h4>
                                                 <div className='subheader'>

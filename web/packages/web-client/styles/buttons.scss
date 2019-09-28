@@ -16,6 +16,10 @@
     }
   }
 
+  .clickable {
+    cursor: pointer;
+  }
+
   button {
     display: flex;
     align-items: center;
@@ -23,8 +27,6 @@
   }
 
   i.material-icons {
-    cursor: pointer;
-    font-size: 1.725rem;
     // line-height: 0;
     // margin-top: .75rem;
 
@@ -46,7 +48,7 @@
     /* display: inline-block; */
     /* width: 20px; */
     border: 1px solid $black;
-    background-color: $white;
+    background-color: inherit;
     padding: 10px;
     border-radius: 3px;
     line-height: 1;
@@ -77,6 +79,10 @@
 
       &:hover {
         background: $lightest-gray;
+
+        &:disabled {
+          background-color: inherit;
+        }
       }
 
       &:active {
@@ -99,12 +105,27 @@
   &.dark {
     a {
       color: $white;
-      background-color: $black;
+      background-color: inherit;
     }
 
     button {
       border: 1px solid $white;
-      background: $black;
+      background-color: inherit;
+
+      &.icon-button {
+        border: none;
+      }
+
+      &:disabled {
+        color: rgba(255, 255, 255, .25)
+      }
+
+      &:hover:not(:disabled) {
+        background-color: rgba(255, 255, 255, .25);
+        color: $white;
+
+
+      }
     }
 
     .link-button,
