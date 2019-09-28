@@ -2,7 +2,11 @@
 // import { initIdTokenHandler, addCallback as addAuthCallback, loggedInEventName, loggedOutEventName } from "../auth"
 import Callbacks from "../callbacks";
 
+// Variables:
+// %basename
 
+// Input order is automatically generated if not present
+// Input/outputs are either strings representing urls, or pointers to another component
 const available = [
     {
         name: "Bystro Annotation",
@@ -18,6 +22,7 @@ const available = [
             4: true,
             3: true
         },
+        input_order: ['assembly', 'inputFile'],
         inputs: {
             assembly: {
                 type_category: 'assembly',
@@ -33,9 +38,10 @@ const available = [
                         value: 'hg38',
                     }]
                 },
-                value: null
+                value: null,
+                type: 'assembly'
             },
-            vcf: [{
+            inputFile: {
                 name: "My cool file",
                 schema: { version: 4 },
                 // value, or a symlink which other tasks this comes from
@@ -45,7 +51,8 @@ const available = [
                 compressed_extensions: ['gz', 'bgz'],
                 accept_stdin: true,
                 description: `Accepts <a href='http://vcf.com' target='_blank'>VCF</a>`,
-            }],
+                type: 'vcf',
+            },
         },
         parameters: {
             minGq: {
@@ -68,11 +75,12 @@ const available = [
             },
         },
         outputs: {
-            bystro: [{
-                name: "%basename%.annotation.tsv",
-                path: "",
-                schema: "bystro_config_file.yml"
-            }]
+            outputFile: {
+                name: "Bystro Annotation",
+                value: null,
+                type: "bystro",
+                schema: {}
+            }
         },
         rating: 0.95,
         reviews: [{ rating: 1, name: "Alex", review: "Great" }, { rating: 1, name: "Alex", review: "Great" }],
@@ -92,8 +100,8 @@ const available = [
         hasConfiguration: false,
         citations: ["Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah"],
         requires: ['stdin'],
-        inputs: {
-            vcf: [{
+        outputs: {
+            "gnomad.exomes.r2.1.1.sites.1.vcf.bgz": {
                 name: "Gnomad Exomes Chr1",
                 schema: { version: "2.11" },
                 // value, or a symlink which other tasks this comes from
@@ -101,12 +109,11 @@ const available = [
                 title: null,
                 description: `<span>Accepts <a href='http://vcf.com' target='_blank'>VCF</a></span>`,
                 type_category: 'url',
-            }],
+                type: 'vcf',
+            },
         },
         parameters: {},
-        outputs: {
-            stdout: 1,
-        },
+        options: {},
         rating: 0.95,
     },
     {
@@ -120,18 +127,19 @@ const available = [
         type: 'hail',
         citations: ["Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah", "Nature", "Cell", "Blah"],
         inputs: {
-            "bystro": [{
-                name: "some file",
-                path: "/path/to/file",
-                schema: "bystro_config_file.yml"
-            }]
+            inputFile: {
+                name: "some input",
+                value: null,
+                type: "bystro",
+                schema: {}
+            }
         },
         outputs: {
-            "tsv": [{
-                name: "some file",
-                path: "/bystro/user-data/output_bystro_1",
+            outputFile: {
+                name: "some output",
+                value: null,
                 schema: "some_other_schema"
-            }]
+            }
         },
         rating: 0.95,
         reviews: [{ rating: 1, name: "Alex", review: "Great" }, { rating: 1, name: "Alex", review: "Great" }]
@@ -142,17 +150,20 @@ const available = [
         type: 'hail',
         author: "Dan King",
         citations: ["Nature", "Cell", "Blah"],
+        input_stage_idx: 0,
+        parameters: {},
         inputs: {
             "vcf": [{
                 name: "My cool file",
-                path: "/path/to/file",
-                schema: { version: 4 }
+                value: null,
+                schema: { version: 4 },
+                type_category: "file",
             }],
         },
         "outputs": {
             "MatrixTable": [{
                 name: "some file",
-                path: "/path/to/file"
+                value: null,
             }]
         },
         rating: 0.95,
@@ -163,18 +174,19 @@ const available = [
         "name": "VCF To Matrix Table",
         id: "2",
         type: 'hail',
+        input_stage_idx: 0,
         citations: ["Nature", "Cell", "Blah"],
         inputs: {
             "MatrixTable": [{
                 name: "some file",
-                path: "/path/to/file"
+                value: "/path/to/file"
             }]
         },
         "outputs":
         {
             "Table": [{
                 name: "some file",
-                path: "/path/to/file"
+                value: "/path/to/file"
             }],
         },
         rating: 0.7,
@@ -188,14 +200,14 @@ const available = [
         inputs: {
             "Table": [{
                 name: "some file",
-                path: "/path/to/file"
+                value: "/path/to/file"
             }]
         },
         "outputs":
         {
             "MatrixTable": [{
                 name: "some file",
-                path: "/path/to/file"
+                value: "/path/to/file"
             }],
         }
         , rating: 0.6,

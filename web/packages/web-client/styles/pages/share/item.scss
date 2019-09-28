@@ -19,8 +19,18 @@
 
         }
 
-        #header-details {
-            margin-left: $margin;
+        #controls-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 20px;
+            margin-bottom: -47px;
+        }
+
+        .subheader {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
         }
 
         select {
@@ -56,6 +66,39 @@
                 flex-basis: 300PX;
                 border: 1px solid $light-gray;
                 margin: 0 20px;
+            }
+
+            .side-item-wrap .analysis-item {
+                flex-basis: 200px;
+            }
+
+            .side-item-wrap.highlight {
+                .card.shadow1 {
+                    box-shadow:
+                        0 1px 3px 0 $light-blue,
+                        0 1px 1px 0 $light-blue,
+                        0 2px 1px -1px $light-blue;
+                }
+
+                .link {
+                    border-color: $light-blue;
+                }
+            }
+
+            #header-details {
+                margin-left: $margin;
+                margin-right: -16px;
+                // margin-top: -10px;
+                // align-self: flex-start;
+                // display: flex;
+                // height: 94px;
+                // justify-content: space-between;
+                // flex-direction: column;
+
+                button+button {
+                    margin-top: 5px;
+                }
+
             }
 
             .analysis-item {
@@ -103,11 +146,29 @@
             &.before {
                 padding-right: 0px;
                 margin-right: 0px;
+
+                &.more:before {
+                    content: "";
+                    position: absolute;
+                    width: 100px;
+                    height: 1px;
+                    border: 1px solid #aeaeae;
+                    left: -100px;
+                }
             }
 
             &.after {
                 padding-left: 0px;
                 margin-left: 0px;
+
+                &.more:before {
+                    content: "";
+                    position: absolute;
+                    width: 100px;
+                    height: 1px;
+                    border: 1px solid #aeaeae;
+                    right: -100px;
+                }
             }
         }
 

@@ -24,6 +24,7 @@ class MyDocument extends Document {
             rel='stylesheet'
             href="https://fonts.googleapis.com/icon?family=Material+Icons"
           />
+          <script src="https://kit.fontawesome.com/1907ff3d9c.js" crossorigin="anonymous"></script>
           <meta name="theme-color" content={theme.palette.primary.main} />
         </Head>
         <body style={{ margin: 0 }}>
