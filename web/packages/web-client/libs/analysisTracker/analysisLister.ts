@@ -7,6 +7,22 @@ import Callbacks from "../callbacks";
 
 // Input order is automatically generated if not present
 // Input/outputs are either strings representing urls, or pointers to another component
+
+// If you supply 10 files to a component that accepts only 1 file
+// It will launch 10 jobs
+// If that component feeds into a component that accepts 1 file
+// it will launch 10 jobs of that component as well, once the current
+// node is done.
+
+// Nodes can only be chained by their compatible inputs/outputs
+// We cannot statically guarantee success, rely on strong typing
+// to specify the programmatic interface
+
+// Every component that exposes parameters is required to have a preview mode
+// The preview mode should be a custom dockerfile that has a small subset of data loaded
+// Should take seconds to run
+// And is required to publish to a "preview" channel
+// For the user's id, which is the topic
 const available = [
     {
         name: "Bystro Annotation",

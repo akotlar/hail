@@ -415,15 +415,24 @@ class Item extends PureComponent {
 
 
                                     <i className='link'></i>
-                                </div> || <div style={{ display: 'flex', justifyContent: 'flex-start' }}><button className='icon-button' onClick={() => Router.push({
-                                    pathname: '/share',
-                                    query: {
-                                        referrer: this.state.currentNodeIdx,
-                                        link_type: link_type_enum.input
-                                    }
-                                })}><i className="material-icons">
-                                        add_circle_outline
-                                </i></button></div>
+                                </div> || (
+
+                                    this.state.currentNode['data']['inputs']
+                                    &&
+                                    <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                                        <button className='icon-button'
+                                            onClick={() => Router.push({
+                                                pathname: '/share',
+                                                query: { referrer: this.state.currentNodeIdx, link_type: link_type_enum.input }
+                                            })}>
+                                            <i className="material-icons">
+                                                add_circle_outline
+                                            </i>
+                                        </button></div>
+
+                                    || <div> Terminal</div>
+
+                                )
 
                             }
                             <div className='center-item-wrap'>
@@ -476,7 +485,8 @@ class Item extends PureComponent {
                                                 {
                                                     !this.state.currentNode['data']['inputs'] ? "No inputs" :
                                                         (
-                                                            this.state.currentNode['data']['input_completed'] ? <div>Done motherfucker</div>
+                                                            this.state.currentNode['data']['input_completed'] ?
+                                                                <div>Done motherfucker</div>
                                                                 :
                                                                 this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'assembly' ? (
                                                                     (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ? <div>Selected: {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} and {this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]}</div> :
