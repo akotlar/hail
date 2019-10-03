@@ -7,80 +7,64 @@ import GenomeSelector from '../../components/GenomeSelector/GenomeSelector';
 import { getNode, addNode, clearNodes, getNodes, link_type_enum } from '../../libs/analysisTracker/analysisBuilder';
 import SanitizeHtml from '../../components/SanitizeHtml';
 import Router, { withRouter } from 'next/router';
-import { Swipeable } from 'react-swipeable'
+import fetch from 'isomorphic-unfetch';
+import { initIdTokenHandler } from '../../libs/auth';
+import { isMatch } from 'lodash';
+import { addCallback as addSocketioCallback, events as socketioEvents } from '../../libs/socketio';
+import ReactTooltip from 'react-tooltip'
 
-// type easy = {
-//     id: string,
-//     name: string,
-//     steps: [],
-//     inputs: [],
-//     parameters: [],
-//     outputs: [],
-//     rating: number,
-//     reviews: [],
-//     hasConfiguration: boolean,
+type events = {
+    submitted: string,
+    started: string,
+    failed: string,
+    completed: string,
+    deleted: string
+}
+
+const batchEvents: events = {
+    submitted: 'batch_submitted',
+    started: 'batch_started',
+    failed: 'batch_failed',
+    completed: 'batch_completed',
+    deleted: 'deleted'
+};
+
+// function LinkComponent(props) {
+//     //  Spread the properties to the underlying DOM element.
+//     return <div>{props.children}</div>
 // }
 
-// function isEquivalent(obj1, obj2) {
-//     if (Array.isArray(obj1)) {
-//         if (!Array.isArray(obj2)) {
-//             return false
-//         }
+console.info("events", batchEvents);
+function _setSocketIOlisteners(socket: any) {
+    console.info('setting socket io listeners in item.tsx');
 
-//         for (const idx in obj1) {
-//             if (typeof obj1[idx] === 'object') {
-//                 if (!isEquivalent(obj1, obj2)) {
-//                     return false;
-//                 }
+    // _removeListeners(socket);
 
-//                 continue;
-//             }
+    socket.on(batchEvents.submitted, (data) => {
+        console.info('received batch submitted event in item.tsx', data);
+        // _forward(events.annotation.submitted, data, _updateJob);
+    });
 
-//             if (obj1 !== obj2) {
-//                 return false;
-//             }
-//         }
+    socket.on(batchEvents.started, (data) => {
+        console.info('received batch started event in item.tsx', data);
+        // _forward(events.annotation.submitted, data, _updateJob);
+    });
 
-//         return true;
-//     }
+    socket.on(batchEvents.failed, (data) => {
+        console.info('received batch failed event in item.tsx', data);
+        // _forward(events.annotation.submitted, data, _updateJob);
+    });
 
-//     if (typeof obj1 === 'object') {
-//         if (typeof obj2 !== 'object') {
-//             return false;
-//         }
+    socket.on(batchEvents.completed, (data) => {
+        console.info('received batch completed event in item.tsx', data);
+        // _forward(events.annotation.submitted, data, _updateJob);
+    });
 
-//         const keys1 = Object.keys(obj1);
-//         const keys2 = Object.keys(obj2);
-
-//         if (keys1.length !== keys2.length) {
-//             return false;
-//         }
-
-//         for (const key of keys1) {
-//             if (!Object.hasOwnProperty(key)) {
-//                 return false;
-//             }
-
-//             if (typeof obj1[key] === 'object') {
-//                 if (!isEquivalent(obj1[key], obj2[key])) {
-//                     return false;
-//                 }
-
-//                 continue;
-//             }
-
-//             if (obj1[key] !== obj2[key]) {
-//                 return false;
-//             }
-//         }
-//     }
-
-//     if (typeof obj1 !== typeof obj2) {
-//         return false;
-//     }
-
-//     return obj1 == obj2;
-// }
+    socket.on(batchEvents.deleted, (data) => {
+        console.info('received batch deleted event in item.tsx', data);
+        // _forward(events.annotation.submitted, data, _updateJob);
+    });
+}
 
 function munge(data): any {
     console.info("DATA", data);
@@ -99,39 +83,58 @@ function munge(data): any {
 
 function mergeInputToOutput(inputComponent, currentComponent): any {
     // Incredibly stupid, sort later
-    console.info('inputc', inputComponent);
     for (const key in inputComponent['data']['outputs']) {
-        const outputType = inputComponent['data']['outputs'][key]['type'];
+        const output = inputComponent['data']['outputs'][key];
+        const outputType = output['type'];
 
         let found = null;
 
-        console.info("output", outputType);
-        console.info(currentComponent['data']);
         for (const key in currentComponent['data']['inputs']) {
-            console.info("key", key);
-            const inputType = currentComponent['data']['inputs'][key]['type'];
-            console.info("type", inputType, outputType);
+            const currentInput = currentComponent['data']['inputs'][key];
+            const inputType = currentInput['type'];
+
             if (inputType === outputType) {
-                console.info("FOUND", inputType);
-                found = key;
-                break;
+                found = true;
+
+                if (currentInput['category'] === 'file') {
+                    if (output['category'] !== 'file') {
+                        throw new Error("Incompatible");
+                    }
+
+                    const schemaIn = currentInput['schema'];
+                    const schemaOut = output['schema'];
+
+                    console.info("schemaIn", schemaIn, "out", schemaOut);
+
+                    // The schema coming from the preceeding component must be equal, or a superset
+                    // of the current component, which it will be serving
+                    if (!isMatch(schemaOut, schemaIn)) {
+                        throw new Error("Incompatible");
+                    }
+                }
+
+                // TODO: handle deletion
+                currentInput['value'] = {
+                    ref: inputComponent,
+                    ref_output_key: key
+                }
             }
         }
 
         if (!found) {
             throw new Error("Incompatible")
         }
-
-        currentComponent['data']['inputs'][found]['value'] = {
-            ref: inputComponent
-        }
     }
+
+    console.info("compatible", currentComponent);
+
     return currentComponent;
 }
 
-function checkSetInputsCompleted(node) {
+
+function checkSetInputsCompleted(node): boolean {
     if (node['data']['inputs'] === undefined) {
-        return;
+        return false;
     }
 
     let inner = node['data'];
@@ -153,7 +156,10 @@ function checkSetInputsCompleted(node) {
 
     if (allCompleted) {
         inner['input_completed'] = true;
+        return true;
     }
+
+    return false;
 }
 
 declare type state = {
@@ -191,10 +197,39 @@ class Item extends PureComponent {
 
     jobType = 'completed'
 
+    socket?: any = null
+
     static async getInitialProps({ query }: any) {
         return {
             id: query.id
         };
+    }
+
+    submit = (currentNode: any, prevNode?: any) => {
+        if (prevNode) {
+            currentNode = mergeInputToOutput(prevNode, currentNode);
+        }
+
+        if (!checkSetInputsCompleted(currentNode)) {
+            return;
+        }
+
+        const auth = initIdTokenHandler();
+
+        fetch('/api/jobs/create', {
+            method: 'POST', // *GET, POST, PUT, DELETE, etc.
+            // mode: 'cors', // no-cors, *cors, same-origin
+            // cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+            credentials: 'same-origin', // include, *same-origin, omit
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${auth.getToken()}`,
+                // 'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            // redirect: 'follow', // manual, *follow, error
+            // referrer: 'no-referrer', // no-referrer, *client
+            body: JSON.stringify(currentNode['data']) // body data type must match "Content-Type" header
+        })
     }
 
     constructor(props: any) {
@@ -248,7 +283,7 @@ class Item extends PureComponent {
         let currentNodeIdx = nodeInfo[1];
 
         // let prevNode, nextNode, currentNode;
-        let needsMergeFromInputToCurrent = false;
+        // let needsMergeFromInputToCurrent = false;
         if (referrer_idx !== undefined) {
             if (link_type === undefined) {
                 throw new Error("link_type must be defined when referrer_idx is defined");
@@ -258,7 +293,7 @@ class Item extends PureComponent {
                 if (link_type == link_type_enum.input) {
                     currentNodeIdx += 1;
 
-                    needsMergeFromInputToCurrent = true;
+                    // needsMergeFromInputToCurrent = true;
 
                 } else {
                     throw new Error("Resources don't take inputs, cannot be targets");
@@ -298,13 +333,35 @@ class Item extends PureComponent {
         const hasMoreBefore = !!(prevNode && getNode(currentNodeIdx - 2));
         const hasMoreAfter = !!(nextNode && getNode(currentNodeIdx + 2));
 
-        if (needsMergeFromInputToCurrent || (prevNode && prevNode['data']['type'] === 'resource')) {
-            currentNode = mergeInputToOutput(prevNode, currentNode);
+        // if (needsMergeFromInputToCurrent || (prevNode && prevNode['data']['type'] === 'resource')) {
+        //     currentNode = mergeInputToOutput(prevNode, currentNode);
 
-            console.info("merged", currentNode);
-        }
+        //     console.info("merged", currentNode);
+        // }
 
-        checkSetInputsCompleted(currentNode);
+        this.submit(currentNode, prevNode);
+        // console.info("DONE?", currentNode['data']['input_completed']);
+        // if (currentNode['data']['input_completed'] === true) {
+        //     console.info("SHOULD START RUNNING");
+        //     const auth = initIdTokenHandler();
+
+        //     console.info("Transitive dependency", currentNode['data']['inputs']);
+        //     console.info("the data", currentNode);
+        //     fetch('/api/jobs/create', {
+        //         method: 'POST', // *GET, POST, PUT, DELETE, etc.
+        //         // mode: 'cors', // no-cors, *cors, same-origin
+        //         // cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+        //         credentials: 'same-origin', // include, *same-origin, omit
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //             'Authorization': `Bearer ${auth.getToken()}`,
+        //             // 'Content-Type': 'application/x-www-form-urlencoded',
+        //         },
+        //         // redirect: 'follow', // manual, *follow, error
+        //         // referrer: 'no-referrer', // no-referrer, *client
+        //         body: JSON.stringify(currentNode['data']) // body data type must match "Content-Type" header
+        //     })
+        // }
 
         this.setState(() => ({
             prevNode,
@@ -318,6 +375,10 @@ class Item extends PureComponent {
 
     componentDidMount() {
         this._callbackId = addCallback(events.analyses, (data) => this.set(data, (this.props as any).router.query.id, (this.props as any).router.query.referrer, (this.props as any).router.query.link_type));
+        addSocketioCallback(socketioEvents.connected, (socket) => {
+            this.socket = socket;
+            _setSocketIOlisteners(socket);
+        })
     }
 
 
@@ -334,7 +395,7 @@ class Item extends PureComponent {
     }
 
     handleInputSelected(inputKey: number, value: string) {
-        this.setState(({ currentNode }: state) => {
+        this.setState(({ currentNode, prevNode }: state) => {
             const job = Object.assign({}, currentNode);
             const inner = job['data'];
 
@@ -342,24 +403,11 @@ class Item extends PureComponent {
             inner['input_stage_idx'] += 1;
 
 
-            checkSetInputsCompleted(job);
+            this.submit(job, prevNode);
             return {
                 currentNode: job
             }
         });
-
-        // console.info("YEP", job);
-
-        // const { query } = (this.props as any).router;
-
-        // Router.push({
-        //     pathname: '/share/item',
-        //     query: {
-        //         id: query.id,
-        //     },
-        // }, null, { shallow: true });
-
-        // console.info('state', this.state);
     }
 
     moveFocus = (shiftBy: number) => {
@@ -385,211 +433,201 @@ class Item extends PureComponent {
         }));
     }
 
-    // addPath = () => {
-    //     alert("clicked");
-    // }
-    // //     <md-card-icon-actions layout-align="end center" class="layout-align-end-center">
-    // //     <span aria-label="Annotation details" md-labeled-by-tooltip="md-tooltip-191">
-    // //       <button class="md-icon-button md-button md-ink-ripple" type="button" ng-transclude="" ng-click="showMore = !showMore">
-    // //         <md-icon class="material-icons ng-binding ng-scope" role="img" aria-label="{{!showMore ? 'expand_more' : 'expand_less'}}">
-    // //           expand_more
-    // //         </md-icon>
-    // //       <div class="md-ripple-container"></div></button>
-
-    // //     </span>
-    // //   </md-card-icon-actions>
     render() {
         return (
             <div id='anayses-item-page' className='centered l-flex'>
-
+                <ReactTooltip />
                 {!this.state.currentNode ? <div>Loading</div> :
-                    <Swipeable onSwipedLeft={(eventData) => console.info(eventData)} >
-                        <span id='analysis-chain' className='l-fg3' style={{ display: 'flex', alignItems: 'center' }}>
+                    <span id='analysis-chain' className='l-fg3' style={{ display: 'flex', alignItems: 'center' }}>
 
-                            {this.state.prevNode &&
-                                <div onClick={() => this.moveFocus(-1)} className={`side-item-wrap before ${this.state.hasMoreBefore ? 'more' : ''} ${this.state.highlightPrevious ? 'highlight' : ''}`} style={{ position: 'relative' }}>
-                                    <div className='analysis-item'>
-                                        <div className='card shadow1 clickable'>
-                                            <div className='header column'>
-                                                <h4>{this.state.prevNode.data.name}</h4>
-                                                <div className='subheader'>
-                                                    <SanitizeHtml html={this.state.prevNode.data.description} />
-                                                </div>
+                        {this.state.prevNode &&
+                            <div onClick={() => this.moveFocus(-1)} className={`side-item-wrap before ${this.state.hasMoreBefore ? 'more' : ''} ${this.state.highlightPrevious ? 'highlight' : ''}`} style={{ position: 'relative' }}>
+                                <div className='analysis-item'>
+                                    <div className='card shadow1 clickable'>
+                                        <div className='header column'>
+                                            <h4>{this.state.prevNode.data.name}</h4>
+                                            <div className='subheader'>
+                                                <SanitizeHtml html={this.state.prevNode.data.description} />
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+
+                                <i className='link' data-tip="hello world" />
+                            </div> || (
 
 
-                                    <i className='link'></i>
-                                </div> || (
-
-
-                                    <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                                        <button disabled={!this.state.currentNode['data']['inputs']} className='icon-button'
-                                            onClick={() => Router.push({
-                                                pathname: '/share',
-                                                query: { referrer: this.state.currentNodeIdx, link_type: link_type_enum.input }
-                                            })}>
-                                            <i className="material-icons">
-                                                add_circle_outline
+                                <div className={`side-item-wrap before`}>
+                                    <button disabled={!this.state.currentNode['data']['inputs']} className='icon-button'
+                                        onClick={() => Router.push({
+                                            pathname: '/share',
+                                            query: { referrer: this.state.currentNodeIdx, link_type: link_type_enum.input }
+                                        })}>
+                                        <i className="material-icons">
+                                            add_circle_outline
                                             </i>
-                                        </button></div>
+                                    </button></div>
 
 
 
-                                )
+                            )
 
-                            }
-                            <div className='center-item-wrap'>
-                                <div className='analysis-item'>
-                                    <div className='row header' style={{ marginTop: 0, display: 'flex' }}>
+                        }
+                        <div className='center-item-wrap'>
+                            <div className='analysis-item'>
+                                <div className='row header' style={{ marginTop: 0, display: 'flex' }}>
 
-                                        <div style={{ marginBottom: 30, display: 'flex', padding: 3, flexDirection: 'column' }}>
+                                    <div className='description'>
+                                        <div className='title'>
                                             <h2>{this.state.currentNode['data']['name']}</h2>
-                                            {this.state.currentNode['data']['description'] ? <div className='subheader'>
-
-                                                <SanitizeHtml html={this.state.currentNode['data']['description']} />
-
-                                            </div> : null}
-                                            <span style={{ display: this.state.expanded ? "initial" : "none" }}>
-
-                                                <div className='subheader'>
-                                                    <a href={this.state.currentNode['data']['authorGithubLink']}><b>{this.state.currentNode['data']['author']}</b></a>
-                                                </div>
-                                                <div className='subheader'>
-                                                    <a href={this.state.currentNode['data']['githubLink']}><b>Project Github Link</b></a>
-                                                </div>
-                                                <div className='subheader'>
-                                                    <a href={this.state.currentNode['data']['dockerUrl']}><b>Dockerfile</b></a>
-                                                </div>
-                                            </span>
-                                        </div>
-                                        <span id='header-details' className="column" style={{ marginRight: -16, alignSelf: 'flex-start' }}>
                                             <button style={{ cursor: 'pointer' }} className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
                                                 <i className="fas fa-sliders-h"></i>
                                             </button>
+                                        </div>
+
+                                        {this.state.currentNode['data']['description'] ? <div className='subheader'>
+
+                                            <SanitizeHtml html={this.state.currentNode['data']['description']} />
                                             <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
                                                 <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
 
                                             </button>
+                                        </div> : null}
+                                        <span style={{ display: this.state.expanded ? "initial" : "none" }}>
 
+                                            <div className='subheader'>
+                                                <a href={this.state.currentNode['data']['authorGithubLink']}><b>{this.state.currentNode['data']['author']}</b></a>
+                                            </div>
+                                            <div className='subheader'>
+                                                <a href={this.state.currentNode['data']['githubLink']}><b>Project Github Link</b></a>
+                                            </div>
+                                            <div className='subheader'>
+                                                <a href={this.state.currentNode['data']['dockerUrl']}><b>Dockerfile</b></a>
+                                            </div>
                                         </span>
                                     </div>
 
-
-
-
-                                    <span style={{ display: 'flex', justifyContent: 'center' }}>
-
-                                        <div className='card shadow1 clickable'>
-
-
-
-
-                                            <div className='content' style={{ marginTop: 20 }}>
-                                                {
-                                                    !this.state.currentNode['data']['inputs'] ? "No inputs" :
-                                                        (
-                                                            this.state.currentNode['data']['input_completed'] ?
-                                                                <div>Done motherfucker</div>
-                                                                :
-                                                                this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'assembly' ? (
-                                                                    (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ? <div>Selected: {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} and {this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]}</div> :
-                                                                        <GenomeSelector
-                                                                            species={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['species'] as any}
-                                                                            assemblies={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['assemblies']}
-                                                                            onSelected={(assembly) => this.handleInputSelected(this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']], assembly)}
-                                                                        />)
-                                                                ) :
-                                                                    this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'file' ? (
-                                                                        <Fragment>
-                                                                            <div className='header column'>
-                                                                                <h3>{this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['title']}</h3>
-                                                                                <div className='subheader'>
-                                                                                    <SanitizeHtml html={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['description']} />
-                                                                                </div>
-
-                                                                            </div>
-
-                                                                            <div className='content' style={{ height: 100, width: 150, margin: "0 auto" }} >
-                                                                                {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ?
-                                                                                    (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']['ref'] ?
-
-                                                                                        <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
-                                                                                            <i className="material-icons" onMouseOver={() => this.setState(() => ({ highlightPrevious: true }))} onMouseLeave={() => this.setState(() => ({ highlightPrevious: false }))}>
-                                                                                                link
-</i>
-                                                                                        </div> : null
-
-                                                                                    ) :
-                                                                                    <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
-                                                                                        <i className="material-icons">
-                                                                                            cloud_upload
-                                                            </i>
-                                                                                        <span>or</span>
-                                                                                        <i className="material-icons" onClick={() => Router.push({
-                                                                                            pathname: '/share',
-                                                                                            query: {
-                                                                                                referrer: this.state.currentNodeIdx,
-                                                                                                link_type: link_type_enum.input,
-                                                                                            }
-                                                                                        })}>
-                                                                                            link
-                                                        </i>
-                                                                                    </div>
-                                                                                }
-                                                                            </div>
-                                                                        </Fragment>
-                                                                    ) : this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'url' ? (
-                                                                        <Fragment>
-                                                                            <a href={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} target='_blank'>{this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['name']}</a>
-
-                                                                        </Fragment>
-                                                                    ) : null
-                                                        )
-
-                                                }
-
-                                            </div>
-                                        </div>
-                                    </span>
-
                                 </div>
-                            </div>
-                            {this.state.nextNode &&
 
-                                <div className={`side-item-wrap after ${this.state.hasMoreAfter ? 'more' : ''}`}>
-                                    <i className='link'></i>
-                                    <div className='analysis-item' onClick={() => this.moveFocus(1)} >
-                                        <div className='card shadow1 clickable'>
-                                            <div className='header column'>
-                                                <h4>{this.state.nextNode.data.name}</h4>
-                                                <div className='subheader'>
-                                                    <SanitizeHtml html={this.state.nextNode.data.description} />
-                                                </div>
+
+
+
+                                <span style={{ display: 'flex', justifyContent: 'center' }}>
+
+                                    <div className='card shadow1 clickable'>
+
+
+
+
+                                        <div className='content'>
+                                            {
+                                                !this.state.currentNode['data']['inputs'] ? "No inputs" :
+                                                    (
+                                                        this.state.currentNode['data']['input_completed'] ?
+                                                            <Fragment>
+                                                                <h3>Running</h3>
+
+                                                            </Fragment>
+                                                            :
+                                                            this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'assembly' ? (
+                                                                (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ? <div>Selected: {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} and {this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]}</div> :
+                                                                    <GenomeSelector
+                                                                        species={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['species'] as any}
+                                                                        assemblies={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['assemblies']}
+                                                                        onSelected={(assembly) => this.handleInputSelected(this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']], assembly)}
+                                                                    />)
+                                                            ) :
+                                                                this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'file' ? (
+                                                                    <Fragment>
+                                                                        <div className='column'>
+                                                                            <h3>{this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['title']}</h3>
+                                                                            <div className='subheader'>
+                                                                                <SanitizeHtml html={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['description']} />
+                                                                            </div>
+
+                                                                        </div>
+
+                                                                        <div className='content' style={{ height: 100, width: 150, margin: "0 auto" }} >
+                                                                            {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ?
+                                                                                (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']['ref'] ?
+
+                                                                                    <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
+                                                                                        <i className="material-icons" onMouseOver={() => this.setState(() => ({ highlightPrevious: true }))} onMouseLeave={() => this.setState(() => ({ highlightPrevious: false }))}>
+                                                                                            link
+</i>
+                                                                                    </div> : null
+
+                                                                                ) :
+                                                                                <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
+                                                                                    <i className="material-icons">
+                                                                                        cloud_upload
+                                                            </i>
+                                                                                    <span>or</span>
+                                                                                    <i className="material-icons" onClick={() => Router.push({
+                                                                                        pathname: '/share',
+                                                                                        query: {
+                                                                                            referrer: this.state.currentNodeIdx,
+                                                                                            link_type: link_type_enum.input,
+                                                                                        }
+                                                                                    })}>
+                                                                                        link
+                                                        </i>
+                                                                                </div>
+                                                                            }
+                                                                        </div>
+                                                                    </Fragment>
+                                                                ) : this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'url' ? (
+                                                                    <Fragment>
+                                                                        <a href={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} target='_blank'>{this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['name']}</a>
+
+                                                                    </Fragment>
+                                                                ) : null
+                                                    )
+
+                                            }
+
+                                        </div>
+                                        <div className='action'>
+                                            <button onClick={() => this.submit(this.state.currentNode, this.state.prevNode)}>Submit</button>
+                                        </div>
+                                    </div>
+                                </span>
+
+                            </div>
+                        </div>
+                        {this.state.nextNode &&
+
+                            <div className={`side-item-wrap after ${this.state.hasMoreAfter ? 'more' : ''}`}>
+                                <i className='link' data-tip="hello world" />
+                                <div className='analysis-item' onClick={() => this.moveFocus(1)} >
+                                    <div className='card shadow1 clickable'>
+                                        <div className='header column'>
+                                            <h4>{this.state.nextNode.data.name}</h4>
+                                            <div className='subheader'>
+                                                <SanitizeHtml html={this.state.nextNode.data.description} />
                                             </div>
                                         </div>
                                     </div>
-
-
                                 </div>
-                                || <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className='icon-button' onClick={() => Router.push({
-                                    pathname: '/share',
-                                    query: {
-                                        referrer: this.state.currentNodeIdx,
-                                        link_type: link_type_enum.output,
-                                    }
-                                })}><i className="material-icons">
-                                        add_circle_outline
-                        </i></button></div>
-                            }
 
-                        </span>
-                    </Swipeable >
+
+                            </div>
+                            || <div className={`side-item-wrap after`}><button className='icon-button' onClick={() => Router.push({
+                                pathname: '/share',
+                                query: {
+                                    referrer: this.state.currentNodeIdx,
+                                    link_type: link_type_enum.output,
+                                }
+                            })}><i className="material-icons">
+                                    add_circle_outline
+                        </i></button></div>
+                        }
+
+                    </span>
 
 
                 }
-            </div >
+            </div>
         );
 
     }

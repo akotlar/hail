@@ -21,10 +21,12 @@ const callbacks = new Callbacks({
     disconnected: [],
 });
 
-export function addCallback(type: string, action: () => void): number {
+export function addCallback(type: string, action: (socket: any) => void): number {
     const id = callbacks.add(type, action);
 
-    action();
+    if (socket) {
+        action(socket);
+    }
 
     return id;
 };
@@ -139,7 +141,6 @@ async function _createAuthListener(socket) {
     });
 
     socket.on('authenticated', function () {
-        var socket = this;
         //not forwarding because I want to expose the socket
         callbacks.call(events.connected, socket);
         _clearAuthAttempts()

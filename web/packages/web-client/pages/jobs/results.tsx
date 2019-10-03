@@ -170,7 +170,7 @@ class Jobs extends React.PureComponent {
                         {/* <DraggableList items={this.state.filteredJobs} /> */}
                         {this.state.filteredJobs.map((job, idx) =>
                             <div key={idx} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} onClick={(e) => this.handleClick(e, idx)} >
-                                <h5 className='header'>{job.name}</h5>
+                                <div className='header'><h5>{job.name}</h5></div>
                                 <div className='content'>
                                     <div className='row'>
                                         <span className='left'>Created on:</span>

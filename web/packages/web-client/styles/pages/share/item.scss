@@ -1,232 +1,366 @@
 @import '../../variables.scss';
 
 #theme-site {
-    #anayses-item-page {
-        width: 100%;
+    #main {
+        // padding-left: 0px;
+        // padding-right: 0px;
 
-        ol {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding-left: 0px;
+        #anayses-item-page {
+            width: 100%;
 
-            li {
+            ol {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-            }
+                padding-left: 0px;
 
-
-        }
-
-        #controls-bottom {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-top: 20px;
-            margin-bottom: -47px;
-        }
-
-        .subheader {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-        }
-
-        select {
-            width: 48%;
-            appearance: none;
-            padding: 10px 2px;
-            background: inherit;
-            border: none;
-            border-bottom: 1px solid $black;
-            border-radius: 0px;
-        }
-
-        .row {
-            align-items: center;
-            display: flex;
-            justify-content: space-around;
-
-            &.header {
-                justify-content: flex-start
-            }
-        }
-
-        #analysis-chain {
-            display: flex;
-            align-items: center;
-            position: relative;
-            justify-content: space-between;
-            position: relative;
-
-            .card {
-                cursor: pointer;
-            }
-
-            .side-item-wrap .header h4,
-            .side-item-wrap .subheader>* {
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 200px;
-            }
-
-            .link {
-                cursor: pointer;
-                font-size: 1.725rem;
-                flex-basis: 300PX;
-                border: 1px solid $light-gray;
-                margin: 0 20px;
-            }
-
-            .side-item-wrap .analysis-item {
-                flex-basis: 200px;
-            }
-
-            .side-item-wrap.highlight {
-                .card.shadow1 {
-                    box-shadow:
-                        0 1px 3px 0 $light-blue,
-                        0 1px 1px 0 $light-blue,
-                        0 2px 1px -1px $light-blue;
+                li {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
+
+
+            }
+
+            #controls-bottom {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 20px;
+                margin-bottom: -47px;
+            }
+
+            .subheader {
+                display: flex;
+                justify-content: flex-start;
+                align-items: center;
+
+                >:first-child {
+                    flex: 1;
+                }
+
+                button {
+                    margin-left: $margin;
+                    margin-right: -1px;
+                }
+            }
+
+            select {
+                width: 48%;
+                appearance: none;
+                padding: 10px 2px;
+                background: inherit;
+                border: none;
+                border-bottom: 1px solid $black;
+                border-radius: 0px;
+            }
+
+            .header {
+                overflow: visible;
+            }
+
+            .row {
+                align-items: center;
+                display: flex;
+                justify-content: space-around;
+
+                &.header {
+                    justify-content: flex-start;
+
+                    margin-right: -19px;
+
+                    .description {
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        margin-bottom: 30px;
+                    }
+
+                }
+            }
+
+            i.link:before {
+                content: "map";
+                position: absolute;
+                padding: 10px;
+                background: white;
+                /* top: 21px; */
+                top: -20px;
+                font-size: 14px;
+                /* transform: translate(0, 0); */
+                left: 36%;
+                margin: auto;
+            }
+
+            #analysis-chain {
+                display: flex;
+                align-items: center;
+                position: relative;
+                justify-content: space-between;
+                position: relative;
+
+                .analysis-item {
+                    width: 100%;
+                }
+
+                .side-item-wrap {
+                    position: relative;
+                    display: flex;
+
+                    flex: 1;
+
+
+                    &.before {
+                        justify-content: flex-start;
+
+                        .analysis-item {
+                            margin-right: 1.5rem;
+                        }
+
+                        >button {
+                            position: relative;
+                            margin-left: -.4375rem;
+
+                            &:hover:before {
+                                content: "Add input edge";
+                                position: absolute;
+                                left: 0;
+                                color: $gray;
+                                margin-left: 20px;
+                                width: 150px;
+                            }
+                        }
+                    }
+
+                    &.after {
+                        justify-content: flex-end;
+
+                        .analysis-item {
+                            margin-left: 1.5rem;
+                        }
+
+                        >button {
+                            position: relative;
+                            margin-right: -.4375rem;
+
+                            &:hover:before {
+                                content: "Add output edge";
+                                position: absolute;
+                                right: 0;
+                                color: $gray;
+                                margin-right: 25px;
+                                width: 150px;
+                            }
+                        }
+                    }
+
+
+
+                    .header h4,
+                    .subheader>* {
+                        white-space: nowrap;
+                        text-overflow: ellipsis;
+                        max-width: 200px;
+                    }
+
+
+
+
+
+                    &.highlight {
+                        .card {
+
+
+                            &.shadow1 {
+                                box-shadow:
+                                    0 1px 3px 0 $light-blue,
+                                    0 1px 1px 0 $light-blue,
+                                    0 2px 1px -1px $light-blue;
+                            }
+                        }
+
+                        .link {
+                            border-color: $light-blue;
+                        }
+                    }
+                }
+
+
+                .card {
+                    min-width: 400px;
+                }
+
+
 
                 .link {
-                    border-color: $light-blue;
+                    cursor: pointer;
+                    font-size: 1.725rem;
+                    flex-basis: 313PX;
+                    border: 1px solid $light-gray;
+                    margin: 0 20px;
+                    position: relative;
+                }
+
+                .title {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+
+                    >:first-child {
+                        flex: 1;
+                        max-width: 500px;
+                    }
+
+                    button {
+                        margin-left: $margin;
+                    }
+                }
+
+                #header-details {
+                    margin-left: $margin;
+                    margin-right: -16px;
+                    // margin-top: -10px;
+                    // align-self: flex-start;
+                    // display: flex;
+                    // height: 94px;
+                    // justify-content: space-between;
+                    // flex-direction: column;
+
+                    button+button {
+                        margin-top: 5px;
+                    }
+
+
+                }
+
+                .analysis-item {
+
+                    &.before {
+
+
+                        +.analysis-item:before {
+                            content: "";
+                            width: 200px;
+                            height: 1px;
+                            position: absolute;
+                            left: -250px;
+                            top: 50%;
+                            border: 1px solid #d4d4d4;
+                        }
+                    }
+
+                    +.analysis-item.after {
+
+
+                        &:before {
+                            content: "";
+                            width: 200px;
+                            height: 1px;
+                            position: absolute;
+                            left: -250px;
+                            top: 50%;
+                            border: 1px solid #d4d4d4;
+                        }
+
+                    }
+
+
                 }
             }
 
-            #header-details {
-                margin-left: $margin;
-                margin-right: -16px;
-                // margin-top: -10px;
-                // align-self: flex-start;
-                // display: flex;
-                // height: 94px;
-                // justify-content: space-between;
-                // flex-direction: column;
-
-                button+button {
-                    margin-top: 5px;
-                }
-
-            }
-
-            .analysis-item {
+            .side-item-wrap {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-basis: 16.67%;
 
                 &.before {
+                    padding-right: 0px;
+                    margin-right: 0px;
 
-
-                    +.analysis-item:before {
+                    &.more:before {
                         content: "";
-                        width: 200px;
-                        height: 1px;
                         position: absolute;
-                        left: -250px;
-                        top: 50%;
-                        border: 1px solid #d4d4d4;
+                        width: 18px;
+                        height: 1px;
+                        border: 1px solid #aeaeae;
+                        left: -14px;
                     }
                 }
 
-                +.analysis-item.after {
+                &.after {
+                    padding-left: 0px;
+                    margin-left: 0px;
 
-
-                    &:before {
+                    &.more:before {
                         content: "";
-                        width: 200px;
-                        height: 1px;
                         position: absolute;
-                        left: -250px;
-                        top: 50%;
-                        border: 1px solid #d4d4d4;
+                        width: 18px;
+                        height: 1px;
+                        border: 1px solid #aeaeae;
+                        right: -14px;
                     }
-
-                }
-
-
-            }
-        }
-
-        .side-item-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-basis: 16.67%;
-
-            &.before {
-                padding-right: 0px;
-                margin-right: 0px;
-
-                &.more:before {
-                    content: "";
-                    position: absolute;
-                    width: 100px;
-                    height: 1px;
-                    border: 1px solid #aeaeae;
-                    left: -100px;
                 }
             }
 
-            &.after {
-                padding-left: 0px;
-                margin-left: 0px;
+            .center-item-wrap {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-basis: 66.67%;
 
-                &.more:before {
-                    content: "";
-                    position: absolute;
-                    width: 100px;
-                    height: 1px;
-                    border: 1px solid #aeaeae;
-                    right: -100px;
-                }
-            }
-        }
-
-        .center-item-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-basis: 66.67%;
-
-        }
-
-
-        .l-flex {
-            overflow-x: hidden;
-        }
-
-        .l-fg3 {
-            display: flex;
-            flex-wrap: wrap;
-
-            @media (min-width: 600px) {
-                margin: -10px;
             }
 
-            >div {
-                padding: 1.5rem;
-                flex-basis: 100%;
+
+            .l-flex {
+                overflow-x: hidden;
+            }
+
+            .l-fg3 {
+                display: flex;
+                flex-wrap: wrap;
 
                 @media (min-width: 600px) {
-                    margin: 10px;
-                    flex-basis: calc(33.333% - 20px);
+                    margin: -10px;
                 }
-            }
 
-            >div+div {
-                @media (max-width: 599px) {
-                    margin-top: 20px;
+                >div {
+                    padding: 1.5rem;
+                    flex-basis: 100%;
+
+                    @media (min-width: 600px) {
+                        flex-basis: calc(33.333% - 20px);
+                    }
                 }
+
+                >div+div {
+                    @media (max-width: 599px) {
+                        margin-top: 20px;
+                    }
+                }
+
+
+
+
             }
-
-
-
 
         }
+    }
+}
 
-
+@media screen and (max-width: 900px) {
+    #theme-site {
+        #main {
+            #anayses-item-page {
+                #analysis-chain {
+                    .card {
+                        min-width: 200px;
+                    }
+                }
+            }
+        }
     }
 }
