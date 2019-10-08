@@ -1,6 +1,10 @@
 @import './variables.scss';
 
 #theme-site {
+  select {
+    cursor: pointer;
+  }
+
   input {
     padding: 10px 0px;
     border: none;

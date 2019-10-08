@@ -78,13 +78,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #theme-site {
   background-color: $white;
   height: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-font-smmothing: grayscale;
-
-  input::placeholder {
-    -webkit-font-smoothing: antialiased;
-    -moz-font-smmothing: grayscale;
-  }
 
   #main {
     display: flex;

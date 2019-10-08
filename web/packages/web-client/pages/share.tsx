@@ -2,45 +2,23 @@ import { Fragment, PureComponent } from "react";
 // import { removeCallback, JobType } from "../libs/jobTracker/jobTracker";
 import "styles/card.scss";
 import "styles/pages/public.scss";
-import Fuse from 'fuse.js';
-import Router, { withRouter } from 'next/router';
-import data from '../libs/analysisTracker/analysisLister';
-// import { daaddta } from '../libs/analysisTracker/analysisBuilder';
-// import ClickAwayListener from 'react-click-away-listener';
-// import '@material/slider/';
-// import Card, {
-//   CardPrimaryContent,
-//   CardMedia,
-//   CardActions,
-//   CardActionButtons,
-//   CardActionIcons
-// } from "@material/react-card";
-// import { MDCSlider } from '@material/slider';
-// import Slider from '@material-ui/core/Slider';
+import Fuse from "fuse.js";
+import Router, { withRouter } from "next/router";
+import data from "../libs/analysisTracker/analysisLister";
 
-// if (MDCSlider) {
-//   console.info('got it')
-// }
-// import 'react-use-gesture';
-// import DraggableList from '../../components/DraggableList';
-
-// import { MDCRipple } from '@material/ripple';
-
-// const selector = '.mdc-button, .mdc-icon-button, .mdc-card__primary-action';
-// const ripples = [].map.call(document.querySelectorAll(selector), function (el) {
-//   return new MDCRipple(el);
-// });
+// TODO: make this actually pull from the database
 
 declare type state = {
-  jobs: any[],
+  jobs: any[];
   // datasets: JobType[];
   // filteredDatasets: JobType[];
   // datasetsSelected: [number, number]
-  jobsSelected: [number, number]
+  jobsSelected: [number, number];
   filteredJobs: any[];
   compatibleJobs: any[];
   // jobSelected: number;
   expanded: {};
+  opacity: number;
   // referrer: number;
 };
 
@@ -55,6 +33,7 @@ class Jobs extends PureComponent {
     compatibleJobs: [],
     // jobSelected: null,
     expanded: {},
+    opacity: 0.45
     // referrer: null,
   };
 
@@ -64,7 +43,13 @@ class Jobs extends PureComponent {
 
   fuse?: any;
 
-  jobType = 'completed'
+  jobType = "completed";
+
+  listenClick = () => {
+    if (this.state.opacity !== 100) {
+      this.setState({ opacity: 100 });
+    }
+  };
 
   static async getInitialProps({ query }: any) {
     // const referrer = typeof query.referrer === 'undefined' ? null : query.referrer;
@@ -79,6 +64,9 @@ class Jobs extends PureComponent {
 
     // this.state.type = query.type;
     this.query = props.query;
+    if (this.query.referrer !== undefined) {
+      this.state.opacity = 100;
+    }
   }
 
   handleChange = selectedOption => {
@@ -86,6 +74,7 @@ class Jobs extends PureComponent {
   };
 
   componentDidMount() {
+    window.addEventListener("click", this.listenClick);
     // enable for analysis list
     // this._callbackId = addCallback('completed', (data: JobType[]) => {
     //   if (this.state.jobs != data) {
@@ -119,18 +108,26 @@ class Jobs extends PureComponent {
       // matchAllTokens: true,
       findAllMatches: true,
       keys: [
-        "name", 'inputFileName', 'createdAt', 'submittedDate', 'assembly', 'type', 'log.progress', 'visibility'
+        "description.title",
+        "description.author",
+        "inputFileName",
+        "createdAt",
+        "submittedDate",
+        "assembly",
+        "type",
+        "log.progress",
+        "visibility"
       ]
     });
   }
 
-
   componentWillUnmount() {
+    window.removeEventListener("onclick", this.listenClick);
     // removeCallback(this.jobType, this._callbackId);
   }
 
   componentDidUpdate() {
-    const { query } = (this.props as any).router
+    const { query } = (this.props as any).router;
     this.query = query;
 
     // // verify props have changed to avoid an infinite loop
@@ -142,23 +139,23 @@ class Jobs extends PureComponent {
     // }
   }
 
-  getCompatible: (idx: number) => any[] = (idx) => {
+  getCompatible: (idx: number) => any[] = idx => {
     let job = this.state.jobs[idx];
 
     console.info(job);
 
     let res: {
       [type: string]: {
-        length: number,
-        items: any[],
-      }
+        length: number;
+        items: any[];
+      };
     } = {};
     Object.keys(job.outputs).forEach(key => {
       const j = job.outputs[key];
       res[key] = {
         length: j.length,
         items: j
-      }
+      };
     });
 
     let newCompatible = this.state.jobs.filter((job, jIdx) => {
@@ -172,32 +169,25 @@ class Jobs extends PureComponent {
         }
       }
       return true;
-    })
+    });
 
     return newCompatible;
-  }
+  };
 
   selectJob = (_: any, job) => {
-    // e.preventDefault();
-    // if (e.target === e.currentTarget) {
-    //   Router.push(`/share/item?${job.id}`, `/share/item?id=${job.id}`, { shallow: false })
-    // }
-    // this.setState({ jobSelected: job })
     event.preventDefault();
-    console.info("id")
+    console.info("id");
 
     Router.push({
-      pathname: '/share/item',
+      pathname: "/share/item",
       query: {
-        id: job.id,
+        id: job._id,
         ...this.query
       }
     });
 
-    // Router.push(`/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, `/share/item?id=${job.id}${this.state.referrer !== null ? "&referrer=" + this.state.referrer : ''}`, { shallow: false })
     console.log(event.target, event.currentTarget);
-    // Router.push(`/share/item?${job.id}`, `/share/item?id=${job.id}`, { shallow: true })
-  }
+  };
 
   filterList = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (this.fuse) {
@@ -219,33 +209,34 @@ class Jobs extends PureComponent {
         jobsSelected: [-1, -1]
       }));
     }
-  }
+  };
 
   handleDetailClick = (e: any, job) => {
-    e.stopPropagation()
+    e.stopPropagation();
 
-    console.info("e", e.target, job.id);
+    console.info("e", e.target, job._id);
 
     this.setState((old: state) => {
       // Mutating old directly prevents reconciler from seeing the change
       const expanded = Object.assign({}, old.expanded);
 
-      expanded[job.id] = !expanded[job.id];
-      console.info('tis', expanded);
+      expanded[job._id] = !expanded[job._id];
+      console.info("tis", expanded);
       return {
         expanded
-      }
+      };
     });
-
-
-  }
+  };
 
   render() {
     return (
-      <div id='public-page' className='centered'>
+      <div id="public-page" className="centered">
         {/* {this.state.jobSelected !== null ?
           <div>Stuff</div> : */}
         <Fragment>
+          {/* <span id="list-list" className="list">
+            <h2>1. Choose</h2>
+          </span> */}
           {/* <span id="left-list" className='list'>
             <input id='public-search' className='outlined' type='text' placeholder='search datasets' onChange={(e) => this.filterList(e)} />
             <span className='job-list'>
@@ -276,18 +267,24 @@ class Jobs extends PureComponent {
               )}
             </span>
           </span> */}
-          <span id='right-list' className='list'>
-            <span id='control-center'>
-              <input id='public-search' className='outlined' type='text' placeholder='search analysis components' onChange={(e) => this.filterList(e)} />
+          <span id="right-list" className="list">
+            <span id="control-center">
+              <input
+                id="public-search"
+                className="outlined"
+                type="text"
+                placeholder="1. Start with an analysis"
+                onChange={e => this.filterList(e)}
+                onClick={() => this.setState({ opacity: 100 })}
+              />
               {/* <div>({this.state.jobsSelected[0] === -1 ? 0 : (this.state.jobsSelected[1] == this.state.jobsSelected[0] ? 1 : this.state.jobsSelected[1] - this.state.jobsSelected[0] + 1)} selected)</div>
               <button id='delete' className='icon-button red' disabled={this.state.jobsSelected[0] === -1}>
                 <i className='material-icons left'>
                   delete_outline
                         </i>
               </button> */}
-
             </span>
-            <span className='job-list'>
+            <span className="job-list" style={{ opacity: this.state.opacity }}>
               {/* <Slider
                 defaultValue={30}
                 // getAriaValueText={valuetext}
@@ -298,51 +295,77 @@ class Jobs extends PureComponent {
                 min={10}
                 max={110}
               /> */}
-              {this.state.filteredJobs.map((job, idx) =>
-                <div key={idx} onClick={(e) => this.selectJob(e, job)} className={`card shadow1 ${idx >= this.state.jobsSelected[0] && idx <= this.state.jobsSelected[1] ? 'selected' : ''}`} >
-                  <div className='header column'>
-                    <h3>{job.name}</h3>
-                    <div className='subheader'>
-                      {job.description}
-                    </div>
-                    <div className='subheader'>
-                      By <a className='right' href={job.authorUrl}>{job.author}</a>
+              {this.state.filteredJobs.map((job, idx) => (
+                <div
+                  key={idx}
+                  onClick={e => this.selectJob(e, job)}
+                  className={`card clickable shadow1 ${
+                    idx >= this.state.jobsSelected[0] &&
+                    idx <= this.state.jobsSelected[1]
+                      ? "selected"
+                      : ""
+                  }`}
+                >
+                  <div className="column">
+                    <h3>{job.description.title}</h3>
+                    <div className="subheader">{job.description.subtitle}</div>
+                    <div className="subheader">
+                      By{" "}
+                      <a className="right" href={job.description.authorUrl}>
+                        {job.description.author}
+                      </a>
                     </div>
                   </div>
-                  <div className='content'>
-
-                    {/* <div className='row'>
-                      <h6 className='left'>Inputs</h6>
-                      {Object.entries(job.inputs).map(val => {
-                        <b className='right'>{val[0]}</b>
-                      })}
-                    </div> */}
-                    {/* <div className='row'>
-                  <span className='left'>{job.type == 'annotation' ? "Input:" : "Query:"}</span>
-                  <b className='right'>
-                    {
-                      job.type == 'annotation'
-                        ? <a href={job.inputFileName}>{job.inputFileName}</a>
-                        : "Some query"
-                    }
-                  </b>
-                </div> */}
-                  </div>
-                  <div className='content footer'>
-                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <a href='#'><b>{job.citations.length} citations</b></a>
-                      <button className={`icon-button`} style={{ alignSelf: 'flex-end' }} onClick={(e) => this.handleDetailClick(e, job)}>
-                        <i className={`material-icons ${this.state.expanded[job.id] ? 'rotate-180' : ''}`}>
+                  <div className="content footer">
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%"
+                      }}
+                    >
+                      <a href="#">
+                        <b>{job.description.citations.length} citations</b>
+                      </a>
+                      <button
+                        className={`icon-button`}
+                        style={{ alignSelf: "flex-end" }}
+                        onClick={e => this.handleDetailClick(e, job)}
+                      >
+                        <i
+                          className={`material-icons ${
+                            this.state.expanded[job._id] ? "rotate-180" : ""
+                          }`}
+                        >
                           keyboard_arrow_down
-                      </i>
+                        </i>
                       </button>
                     </span>
-                    <div className='content' style={{ display: this.state.expanded[job.id] ? 'block' : 'none' }}>
-                      Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.
+                    <div
+                      className="content"
+                      style={{
+                        display: this.state.expanded[job._id] ? "block" : "none"
+                      }}
+                    >
+                      Contrary to popular belief, Lorem Ipsum is not simply
+                      random text. It has roots in a piece of classical Latin
+                      literature from 45 BC, making it over 2000 years old.
+                      Richard McClintock, a Latin professor at Hampden-Sydney
+                      College in Virginia, looked up one of the more obscure
+                      Latin words, consectetur, from a Lorem Ipsum passage, and
+                      going through the cites of the word in classical
+                      literature, discovered the undoubtable source. Lorem Ipsum
+                      comes from sections 1.10.32 and 1.10.33 of "de Finibus
+                      Bonorum et Malorum" (The Extremes of Good and Evil) by
+                      Cicero, written in 45 BC. This book is a treatise on the
+                      theory of ethics, very popular during the Renaissance. The
+                      first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..",
+                      comes from a line in section 1.10.32.
                     </div>
                   </div>
                 </div>
-              )}
+              ))}
             </span>
             {/* {(this.state.compatibleJobs.length > 0 &&
             <div id='compatible' >
@@ -366,17 +389,12 @@ class Jobs extends PureComponent {
                 </div>
               )}
             </div>)} */}
-
           </span>
         </Fragment>
 
-
-
-
         {/* } */}
-      </div >
+      </div>
     );
-
   }
 }
 

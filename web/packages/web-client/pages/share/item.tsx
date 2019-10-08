@@ -1,636 +1,906 @@
-import { PureComponent, Fragment } from "react";
-import data, { addCallback, removeCallback, events } from "../../libs/analysisTracker/analysisLister";
+import React from "react";
+import data, {
+  addCallback,
+  removeCallback,
+  events
+} from "../../libs/analysisTracker/analysisLister";
 import "styles/card.scss";
 import "styles/pages/public.scss";
-import "styles/pages/share/item.scss"
-import GenomeSelector from '../../components/GenomeSelector/GenomeSelector';
-import { getNode, addNode, clearNodes, getNodes, link_type_enum } from '../../libs/analysisTracker/analysisBuilder';
-import SanitizeHtml from '../../components/SanitizeHtml';
-import Router, { withRouter } from 'next/router';
-import fetch from 'isomorphic-unfetch';
-import { initIdTokenHandler } from '../../libs/auth';
-import { isMatch } from 'lodash';
-import { addCallback as addSocketioCallback, events as socketioEvents } from '../../libs/socketio';
-import ReactTooltip from 'react-tooltip'
+import "styles/pages/share/item.scss";
+import GenomeSelector from "../../components/GenomeSelector/GenomeSelector";
 
-type events = {
-    submitted: string,
-    started: string,
-    failed: string,
-    completed: string,
-    deleted: string
-}
+// import clsx from "clsx";
+// import { createStyles, makeStyles, Theme } from "@material-ui/core/styles";
+// import CircularProgress from "@material-ui/core/CircularProgress";
+// import { green } from "@material-ui/core/colors";
+// import Button from "@material-ui/core/Button";
+// // import Fab from "@material-ui/core/Fab";
+// // import CheckIcon from "@material-ui/icons/Check";
+// // import SaveIcon from "@material-ui/icons/Save";
 
-const batchEvents: events = {
-    submitted: 'batch_submitted',
-    started: 'batch_started',
-    failed: 'batch_failed',
-    completed: 'batch_completed',
-    deleted: 'deleted'
-};
+// const useStyles = makeStyles((theme: Theme) =>
+//   createStyles({
+//     root: {
+//       display: "flex",
+//       alignItems: "center"
+//     },
+//     wrapper: {
+//       margin: theme.spacing(1),
+//       position: "relative"
+//     },
+//     buttonSuccess: {
+//       backgroundColor: green[500],
+//       "&:hover": {
+//         backgroundColor: green[700]
+//       }
+//     },
+//     fabProgress: {
+//       color: green[500],
+//       position: "absolute",
+//       top: 0,
+//       left: -1,
+//       zIndex: 1
+//     },
+//     buttonProgress: {
+//       color: green[500],
+//       position: "absolute",
+//       top: "50%",
+//       left: "50%",
+//       marginTop: -12,
+//       marginLeft: -12
+//     }
+//   })
+// );
 
-// function LinkComponent(props) {
-//     //  Spread the properties to the underlying DOM element.
-//     return <div>{props.children}</div>
+// function CircularIntegration(props) {
+//   const classes = useStyles(props);
+//   const [loading, setLoading] = React.useState(false);
+//   const [success, setSuccess] = React.useState(false);
+//   const timer = React.useRef<NodeJS.Timeout>();
+//   const currentNode: analysisItem = props;
+
+//   console.info("currentNode", currentNode);
+//   const buttonClassname = clsx({
+//     [classes.buttonSuccess]: success
+//   });
+
+//   React.useEffect(() => {
+//     return () => {
+//       clearTimeout(timer.current);
+//     };
+//   }, []);
+
+//   const handleButtonClick = () => {
+//     if (!loading) {
+//       setSuccess(false);
+//       setLoading(true);
+//       timer.current = setTimeout(() => {
+//         setSuccess(true);
+//         setLoading(false);
+//       }, 2000);
+//     }
+//   };
+
+//   return (
+//     <div className={classes.root}>
+//       <div className={classes.wrapper}>
+//         <button className="icon-button">
+//           <i onClick={handleButtonClick} className="material-icons">
+//             directions_run
+//           </i>
+//         </button>
+
+//         <CircularProgress size={40} className={classes.fabProgress} />
+//       </div>
+//       <div className={classes.wrapper}>
+//         <Button
+//           variant="contained"
+//           color="primary"
+//           className={buttonClassname}
+//           disabled={loading}
+//           onClick={handleButtonClick}
+//         >
+//           Accept terms
+//         </Button>
+
+//         <CircularProgress size={24} className={classes.buttonProgress} />
+//       </div>
+//     </div>
+//   );
 // }
 
-console.info("events", batchEvents);
-function _setSocketIOlisteners(socket: any) {
-    console.info('setting socket io listeners in item.tsx');
+import {
+  getNode,
+  cloneAndAddNode,
+  clearNodes,
+  // getPrevNode,
+  getPrevNodes,
+  // getNextNode,
+  linkHasPreviousNodes,
+  linkHasNextNodes,
+  getNextNodes,
+  linkNodes,
+  getNodeCount,
+  analysisItem,
+  linkedNode,
+  removeLinkByInput,
+  submit,
+  checkInputsCompleted,
+  isSubmitted,
+  runningOrSubmitted
+  // batchEvents,
+  // unCycleAll
+} from "../../libs/analysisTracker/analysisBuilder";
+import SanitizeHtml from "../../components/SanitizeHtml";
+import Router, { withRouter } from "next/router";
 
-    // _removeListeners(socket);
-
-    socket.on(batchEvents.submitted, (data) => {
-        console.info('received batch submitted event in item.tsx', data);
-        // _forward(events.annotation.submitted, data, _updateJob);
-    });
-
-    socket.on(batchEvents.started, (data) => {
-        console.info('received batch started event in item.tsx', data);
-        // _forward(events.annotation.submitted, data, _updateJob);
-    });
-
-    socket.on(batchEvents.failed, (data) => {
-        console.info('received batch failed event in item.tsx', data);
-        // _forward(events.annotation.submitted, data, _updateJob);
-    });
-
-    socket.on(batchEvents.completed, (data) => {
-        console.info('received batch completed event in item.tsx', data);
-        // _forward(events.annotation.submitted, data, _updateJob);
-    });
-
-    socket.on(batchEvents.deleted, (data) => {
-        console.info('received batch deleted event in item.tsx', data);
-        // _forward(events.annotation.submitted, data, _updateJob);
-    });
+enum link_type_enum {
+  input = 1,
+  output
 }
 
-function munge(data): any {
-    console.info("DATA", data);
-    if (data['inputs']) {
-        if (!data['input_order']) {
-            data['input_order'] = Object.keys(data['inputs']).sort();
-        }
+function forceRefresh(old: number) {
+  if (old) {
+    return null;
+  }
 
-        data['input_stage'] = data['input_order'][0];
-        data['input_stage_idx'] = 0;
-        data['input_completed'] = false;
-    }
-
-    return data;
+  return Math.random();
 }
 
-function mergeInputToOutput(inputComponent, currentComponent): any {
-    // Incredibly stupid, sort later
-    for (const key in inputComponent['data']['outputs']) {
-        const output = inputComponent['data']['outputs'][key];
-        const outputType = output['type'];
+function JobProgress(props: { node: analysisItem }) {
+  const currentNode: any = props.node;
 
-        let found = null;
-
-        for (const key in currentComponent['data']['inputs']) {
-            const currentInput = currentComponent['data']['inputs'][key];
-            const inputType = currentInput['type'];
-
-            if (inputType === outputType) {
-                found = true;
-
-                if (currentInput['category'] === 'file') {
-                    if (output['category'] !== 'file') {
-                        throw new Error("Incompatible");
-                    }
-
-                    const schemaIn = currentInput['schema'];
-                    const schemaOut = output['schema'];
-
-                    console.info("schemaIn", schemaIn, "out", schemaOut);
-
-                    // The schema coming from the preceeding component must be equal, or a superset
-                    // of the current component, which it will be serving
-                    if (!isMatch(schemaOut, schemaIn)) {
-                        throw new Error("Incompatible");
-                    }
-                }
-
-                // TODO: handle deletion
-                currentInput['value'] = {
-                    ref: inputComponent,
-                    ref_output_key: key
-                }
-            }
-        }
-
-        if (!found) {
-            throw new Error("Incompatible")
-        }
-    }
-
-    console.info("compatible", currentComponent);
-
-    return currentComponent;
-}
-
-
-function checkSetInputsCompleted(node): boolean {
-    if (node['data']['inputs'] === undefined) {
-        return false;
-    }
-
-    let inner = node['data'];
-    let allCompleted = true;
-    if (inner['input_stage_idx'] != inner['input_order'].length) {
-        let next = inner['input_stage_idx'];
-
-        for (let i = next; i < inner['input_order'].length; i++) {
-            const key = inner['input_order'][i];
-
-            if (inner['inputs'][key]['value'] !== null && inner['inputs'][key]['value'] !== undefined) {
-                inner['input_stage_idx'] += 1;
-            } else {
-                allCompleted = false;
-                break;
-            }
-        }
-    }
-
-    if (allCompleted) {
-        inner['input_completed'] = true;
-        return true;
-    }
-
-    return false;
+  switch (currentNode.submission.state) {
+    case "not_submitted": // local case
+      return <h3>Not Submitted</h3>;
+    case "queued":
+      return <h3>Queued</h3>;
+    case "submitted":
+      return <h3>Submitted</h3>;
+    case "started":
+      return <h3>Started</h3>;
+    case "completed":
+      return <h3>Completed</h3>;
+    case "failed":
+      return <h3>Failed</h3>;
+    default:
+      return <h3>Unknown</h3>;
+  }
 }
 
 declare type state = {
-    currentNode?: any;
-    currentNodeIdx?: number;
-    hasMoreBefore?: boolean;
-    hasMoreAfter?: boolean;
-    prevNode?: any;
-    nextNode?: any;
-    expanded: boolean;
-    speciesChosen?: string,
-    assemblyChosen?: string,
-    showAll: boolean,
-    highlightPrevious: boolean,
-    highlightNext: boolean
+  progress: string;
+  currentNodeInputCompleted: boolean;
+  currentNode?: analysisItem;
+  currentNodeDescription?: any;
+  currentNodeSpec?: any;
+  currentNodeInputs?: any;
+  currentNodeOutputs?: any;
+  currentInput?: any;
+  isLastInput: boolean;
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
+  prevNodesDepth1?: linkedNode;
+  nextNodesDepth1?: linkedNode;
+  expanded: boolean;
+  speciesChosen?: string;
+  assemblyChosen?: string;
+  showAll: boolean;
+  highlightPrevious: boolean;
+  highlightNext: boolean;
+  stepCheckpoint?: number;
 };
 
-class Item extends PureComponent {
-    state: state = {
-        currentNode: null,
-        currentNodeIdx: null,
-        hasMoreAfter: null,
-        hasMoreBefore: null,
-        prevNode: null,
-        nextNode: null,
-        expanded: false,
-        showAll: false,
-        highlightPrevious: false,
-        highlightNext: false
+class Item extends React.PureComponent {
+  state: state = {
+    stepCheckpoint: null, // force dom update
+    currentNodeInputCompleted: false,
+    progress: "",
+    currentNode: null,
+    currentNodeDescription: null,
+    currentInput: null,
+    currentNodeSpec: null,
+    currentNodeInputs: null,
+    currentNodeOutputs: null,
+    hasMoreAfter: null,
+    hasMoreBefore: null,
+    prevNodesDepth1: null,
+    nextNodesDepth1: null,
+    isLastInput: false,
+    expanded: false,
+    showAll: false,
+    highlightPrevious: false,
+    highlightNext: false
+  };
+
+  keyListener = (e: any) => {
+    if (e.keyCode == 37) {
+      if (this.state.prevNodesDepth1) {
+        this.moveFocus(Object.keys(this.state.prevNodesDepth1)[0]);
+      }
+    }
+
+    if (e.keyCode == 39) {
+      if (this.state.nextNodesDepth1) {
+        this.moveFocus(Object.keys(this.state.nextNodesDepth1)[0]);
+      }
+    }
+  };
+
+  _callbackId?: number = null;
+
+  fuse?: any = null;
+
+  jobType = "completed";
+
+  socket?: any = null;
+
+  static async getInitialProps({ query }: any) {
+    return {
+      id: query.jobID
     };
+  }
 
-    _callbackId?: number = null;
-
-    fuse?: any = null
-
-    jobType = 'completed'
-
-    socket?: any = null
-
-    static async getInitialProps({ query }: any) {
-        return {
-            id: query.id
-        };
-    }
-
-    submit = (currentNode: any, prevNode?: any) => {
-        if (prevNode) {
-            currentNode = mergeInputToOutput(prevNode, currentNode);
-        }
-
-        if (!checkSetInputsCompleted(currentNode)) {
-            return;
-        }
-
-        const auth = initIdTokenHandler();
-
-        fetch('/api/jobs/create', {
-            method: 'POST', // *GET, POST, PUT, DELETE, etc.
-            // mode: 'cors', // no-cors, *cors, same-origin
-            // cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-            credentials: 'same-origin', // include, *same-origin, omit
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${auth.getToken()}`,
-                // 'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            // redirect: 'follow', // manual, *follow, error
-            // referrer: 'no-referrer', // no-referrer, *client
-            body: JSON.stringify(currentNode['data']) // body data type must match "Content-Type" header
-        })
-    }
-
-    constructor(props: any) {
-        super(props);
-        if (getNode(0) === null) {
-            console.info('none')
-        }
-
-        // const idx = addNode({
-        //     data: data[props.id]
-        // });
-
-        // const item = getNode(idx);
-
-        // this.set()
-        // this.state.jobSelected = data.analyses[props.id];
-    }
-
-    set = (data, id: number, referrer_idx?: number, link_type?: link_type_enum) => {
-        if (referrer_idx === undefined) {
-            clearNodes();
-        } else if (!getNodes().length) {
-            Router.push("/share");
-            return;
-        }
-
-        if (!data) {
-            console.info("Loding");
-            return;
-        }
-
-        if (!data[id]) {
-            console.error("Couldn't find the analysis in the analysis list");
-            return;
-        }
-
-        // TODO: avoid JSON.parse, use known schema to clone fast
-        const analysisComponent = munge(JSON.parse(JSON.stringify(data[id])));
-
-        // console.info('easy,', easyVersion);
-        const nodeInfo = addNode({
-            data: analysisComponent
-        }, referrer_idx, link_type);
-
-        console.info("ADD NODE RESULT", nodeInfo);
-
-        if (!nodeInfo) {
-            throw new Error("Couldn't add node");
-        }
-
-        let currentNodeIdx = nodeInfo[1];
-
-        // let prevNode, nextNode, currentNode;
-        // let needsMergeFromInputToCurrent = false;
-        if (referrer_idx !== undefined) {
-            if (link_type === undefined) {
-                throw new Error("link_type must be defined when referrer_idx is defined");
-            }
-
-            if (analysisComponent['type'] === 'resource') {
-                if (link_type == link_type_enum.input) {
-                    currentNodeIdx += 1;
-
-                    // needsMergeFromInputToCurrent = true;
-
-                } else {
-                    throw new Error("Resources don't take inputs, cannot be targets");
-                }
-            }
-        }
-
-        console.info("CURRENT NODE", nodeInfo[1], currentNodeIdx, referrer_idx, link_type, getNodes());
-
-        let prevNode = getNode(currentNodeIdx - 1);
-        let currentNode = getNode(currentNodeIdx);
-        let nextNode = getNode(currentNodeIdx + 1);
-
-        if (referrer_idx !== undefined) {
-            const cData = currentNode['data'];
-
-            if (analysisComponent['type'] === 'resource') {
-                for (const idx in cData['inputs']) {
-                    const type = cData['inputs'][idx]['type'];
-                    console.info("input", type);
-                    const pInput = analysisComponent['outputs'][type];
-                    console.info('pintput', pInput);
-                    if (pInput) {
-                        console.info("found type");
-
-                        cData['inputs'][idx] = pInput;
-
-                    }
-                }
-            }
-        }
-
-        // checkCompatible(currentNode);
-        // console.info("trunk", built);
-        console.info("prev", prevNode, getNode(0), "curr", currentNode, "next", nextNode);
-
-        const hasMoreBefore = !!(prevNode && getNode(currentNodeIdx - 2));
-        const hasMoreAfter = !!(nextNode && getNode(currentNodeIdx + 2));
-
-        // if (needsMergeFromInputToCurrent || (prevNode && prevNode['data']['type'] === 'resource')) {
-        //     currentNode = mergeInputToOutput(prevNode, currentNode);
-
-        //     console.info("merged", currentNode);
-        // }
-
-        this.submit(currentNode, prevNode);
-        // console.info("DONE?", currentNode['data']['input_completed']);
-        // if (currentNode['data']['input_completed'] === true) {
-        //     console.info("SHOULD START RUNNING");
-        //     const auth = initIdTokenHandler();
-
-        //     console.info("Transitive dependency", currentNode['data']['inputs']);
-        //     console.info("the data", currentNode);
-        //     fetch('/api/jobs/create', {
-        //         method: 'POST', // *GET, POST, PUT, DELETE, etc.
-        //         // mode: 'cors', // no-cors, *cors, same-origin
-        //         // cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-        //         credentials: 'same-origin', // include, *same-origin, omit
-        //         headers: {
-        //             'Content-Type': 'application/json',
-        //             'Authorization': `Bearer ${auth.getToken()}`,
-        //             // 'Content-Type': 'application/x-www-form-urlencoded',
-        //         },
-        //         // redirect: 'follow', // manual, *follow, error
-        //         // referrer: 'no-referrer', // no-referrer, *client
-        //         body: JSON.stringify(currentNode['data']) // body data type must match "Content-Type" header
-        //     })
-        // }
-
-        this.setState(() => ({
-            prevNode,
-            nextNode,
-            currentNode,
-            currentNodeIdx,
-            hasMoreAfter,
-            hasMoreBefore
+  submit = (currentNode: any) => {
+    // TODO: actually do somehting
+    submit(currentNode, () => {
+      this.setState((old: state) => ({
+        currentNode,
+        stepCheckpoint: forceRefresh(old.stepCheckpoint)
+      }));
+    })
+      .then((updateCurrentNode: analysisItem) => {
+        console.info("GOT THEN", updateCurrentNode);
+        this.setState((old: state) => ({
+          currentNode: updateCurrentNode,
+          stepCheckpoint: forceRefresh(old.stepCheckpoint)
         }));
-    }
-
-    componentDidMount() {
-        this._callbackId = addCallback(events.analyses, (data) => this.set(data, (this.props as any).router.query.id, (this.props as any).router.query.referrer, (this.props as any).router.query.link_type));
-        addSocketioCallback(socketioEvents.connected, (socket) => {
-            this.socket = socket;
-            _setSocketIOlisteners(socket);
-        })
-    }
-
-
-    componentWillUnmount() {
-        removeCallback(events.analyses, this._callbackId);
-    }
-
-    componentDidUpdate(prevProps) {
-        const { query } = (this.props as any).router
-        // verify props have changed to avoid an infinite loop
-        if (query.id !== prevProps.router.query.id) {
-            this.set(data.analyses, query.id, query.referrer, query.link_type);
-        }
-    }
-
-    handleInputSelected(inputKey: number, value: string) {
-        this.setState(({ currentNode, prevNode }: state) => {
-            const job = Object.assign({}, currentNode);
-            const inner = job['data'];
-
-            inner['inputs'][inputKey]['value'] = value;
-            inner['input_stage_idx'] += 1;
-
-
-            this.submit(job, prevNode);
-            return {
-                currentNode: job
-            }
+      })
+      .catch(err => {
+        console.error("GOT ERR in item", err);
+        this.setState((old: state) => {
+          return {
+            currentNode: getNode(old.currentNode.jobID),
+            stepCheckpoint: Math.random()
+          };
         });
+
+        console.info("SET STTE", getNode(this.state.currentNode.jobID));
+      });
+  };
+
+  constructor(props: any) {
+    super(props);
+  }
+
+  updateStateForNewComponent = (currentNode: analysisItem) => {
+    let hasMoreBefore;
+    let hasMoreAfter;
+    let currentNodeInputs;
+    let currentNodeDescription;
+    let currentNodeSpec;
+    let prevNodesDepth1;
+    let nextNodesDepth1;
+    let currentNodeOutputs;
+
+    prevNodesDepth1 = getPrevNodes(currentNode);
+    nextNodesDepth1 = getNextNodes(currentNode);
+    currentNodeDescription = currentNode.description;
+    currentNodeInputs = currentNode.inputs;
+    currentNodeSpec = currentNode.spec;
+    currentNodeOutputs = currentNode.outputs;
+    hasMoreBefore = prevNodesDepth1 && linkHasPreviousNodes(prevNodesDepth1);
+    hasMoreAfter = nextNodesDepth1 && linkHasNextNodes(nextNodesDepth1);
+    const currentNodeInputCompleted = checkInputsCompleted(currentNode);
+
+    // const isLastInput = currentNodeSpec.input_order[0]
+    this.setState((old: state) => ({
+      prevNodesDepth1,
+      nextNodesDepth1,
+      currentNode,
+      currentNodeDescription,
+      currentNodeSpec,
+      currentNodeInputs,
+      currentNodeOutputs,
+      currentNodeInputCompleted,
+      hasMoreAfter,
+      hasMoreBefore,
+      stepCheckpoint: forceRefresh(old.stepCheckpoint)
+    }));
+  };
+
+  removeLink = (inputKey: string) => {
+    const node = removeLinkByInput(this.state.currentNode, inputKey);
+    this.updateStateForNewComponent(node);
+  };
+
+  set = (
+    analysisList: any,
+    newComponentID: string,
+    referrerComponentID?: string,
+    newComponentType?: link_type_enum
+  ) => {
+    if (!Object.keys(analysisList).length) {
+      console.error("Loding");
+      return;
     }
 
-    moveFocus = (shiftBy: number) => {
-        const currentNodeIdx = this.state.currentNodeIdx + shiftBy;
-        const currentNode = getNode(currentNodeIdx);
-        const nextNode = getNode(currentNodeIdx + 1);
-        const prevNode = getNode(currentNodeIdx - 1);
+    console.info("FOUND", analysisList, newComponentID);
 
-        const hasMoreBefore = prevNode && !!getNode(currentNodeIdx - 2);
-        const hasMoreAfter = nextNode && !!getNode(currentNodeIdx + 2);
-
-        console.info("MOVED", this.state.currentNodeIdx, currentNodeIdx, prevNode, currentNode, nextNode)
-        console.info("has more before?", hasMoreAfter);
-        console.info("has more after?", hasMoreAfter);
-
-        this.setState(() => ({
-            currentNode,
-            currentNodeIdx,
-            nextNode,
-            prevNode,
-            hasMoreBefore,
-            hasMoreAfter
-        }));
+    if (!analysisList[newComponentID]) {
+      console.error(
+        "Couldn't find the analysis in the analysis list",
+        analysisList
+      );
+      Router.push("/share");
+      return;
     }
 
-    render() {
-        return (
-            <div id='anayses-item-page' className='centered l-flex'>
-                <ReactTooltip />
-                {!this.state.currentNode ? <div>Loading</div> :
-                    <span id='analysis-chain' className='l-fg3' style={{ display: 'flex', alignItems: 'center' }}>
+    if (referrerComponentID === undefined) {
+      clearNodes();
+    } else if (getNodeCount() == 0) {
+      console.info("returning");
+      Router.push("/share");
+      return;
+    }
 
-                        {this.state.prevNode &&
-                            <div onClick={() => this.moveFocus(-1)} className={`side-item-wrap before ${this.state.hasMoreBefore ? 'more' : ''} ${this.state.highlightPrevious ? 'highlight' : ''}`} style={{ position: 'relative' }}>
-                                <div className='analysis-item'>
-                                    <div className='card shadow1 clickable'>
-                                        <div className='header column'>
-                                            <h4>{this.state.prevNode.data.name}</h4>
-                                            <div className='subheader'>
-                                                <SanitizeHtml html={this.state.prevNode.data.description} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+    const newNode = cloneAndAddNode(analysisList[newComponentID]);
 
-                                <i className='link' data-tip="hello world" />
-                            </div> || (
+    let currentNode: analysisItem;
 
+    if (referrerComponentID == undefined) {
+      currentNode = newNode;
+    } else {
+      currentNode = getNode(referrerComponentID);
 
-                                <div className={`side-item-wrap before`}>
-                                    <button disabled={!this.state.currentNode['data']['inputs']} className='icon-button'
-                                        onClick={() => Router.push({
-                                            pathname: '/share',
-                                            query: { referrer: this.state.currentNodeIdx, link_type: link_type_enum.input }
-                                        })}>
-                                        <i className="material-icons">
-                                            add_circle_outline
-                                            </i>
-                                    </button></div>
-
-
-
-                            )
-
-                        }
-                        <div className='center-item-wrap'>
-                            <div className='analysis-item'>
-                                <div className='row header' style={{ marginTop: 0, display: 'flex' }}>
-
-                                    <div className='description'>
-                                        <div className='title'>
-                                            <h2>{this.state.currentNode['data']['name']}</h2>
-                                            <button style={{ cursor: 'pointer' }} className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
-                                                <i className="fas fa-sliders-h"></i>
-                                            </button>
-                                        </div>
-
-                                        {this.state.currentNode['data']['description'] ? <div className='subheader'>
-
-                                            <SanitizeHtml html={this.state.currentNode['data']['description']} />
-                                            <button className="icon-button" onClick={() => this.setState((old: state) => ({ expanded: !old.expanded }))}>
-                                                <i className={`material-icons ${this.state.expanded ? "rotate-180" : null}`} aria-label="details">expand_more</i>
-
-                                            </button>
-                                        </div> : null}
-                                        <span style={{ display: this.state.expanded ? "initial" : "none" }}>
-
-                                            <div className='subheader'>
-                                                <a href={this.state.currentNode['data']['authorGithubLink']}><b>{this.state.currentNode['data']['author']}</b></a>
-                                            </div>
-                                            <div className='subheader'>
-                                                <a href={this.state.currentNode['data']['githubLink']}><b>Project Github Link</b></a>
-                                            </div>
-                                            <div className='subheader'>
-                                                <a href={this.state.currentNode['data']['dockerUrl']}><b>Dockerfile</b></a>
-                                            </div>
-                                        </span>
-                                    </div>
-
-                                </div>
-
-
-
-
-                                <span style={{ display: 'flex', justifyContent: 'center' }}>
-
-                                    <div className='card shadow1 clickable'>
-
-
-
-
-                                        <div className='content'>
-                                            {
-                                                !this.state.currentNode['data']['inputs'] ? "No inputs" :
-                                                    (
-                                                        this.state.currentNode['data']['input_completed'] ?
-                                                            <Fragment>
-                                                                <h3>Running</h3>
-
-                                                            </Fragment>
-                                                            :
-                                                            this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'assembly' ? (
-                                                                (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ? <div>Selected: {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} and {this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]}</div> :
-                                                                    <GenomeSelector
-                                                                        species={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['species'] as any}
-                                                                        assemblies={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['assemblies']}
-                                                                        onSelected={(assembly) => this.handleInputSelected(this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']], assembly)}
-                                                                    />)
-                                                            ) :
-                                                                this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'file' ? (
-                                                                    <Fragment>
-                                                                        <div className='column'>
-                                                                            <h3>{this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['title']}</h3>
-                                                                            <div className='subheader'>
-                                                                                <SanitizeHtml html={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['description']} />
-                                                                            </div>
-
-                                                                        </div>
-
-                                                                        <div className='content' style={{ height: 100, width: 150, margin: "0 auto" }} >
-                                                                            {this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value'] ?
-                                                                                (this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']['ref'] ?
-
-                                                                                    <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
-                                                                                        <i className="material-icons" onMouseOver={() => this.setState(() => ({ highlightPrevious: true }))} onMouseLeave={() => this.setState(() => ({ highlightPrevious: false }))}>
-                                                                                            link
-</i>
-                                                                                    </div> : null
-
-                                                                                ) :
-                                                                                <div className='row centered' style={{ width: 150, justifyContent: 'space-around', alignItems: 'center' }}>
-                                                                                    <i className="material-icons">
-                                                                                        cloud_upload
-                                                            </i>
-                                                                                    <span>or</span>
-                                                                                    <i className="material-icons" onClick={() => Router.push({
-                                                                                        pathname: '/share',
-                                                                                        query: {
-                                                                                            referrer: this.state.currentNodeIdx,
-                                                                                            link_type: link_type_enum.input,
-                                                                                        }
-                                                                                    })}>
-                                                                                        link
-                                                        </i>
-                                                                                </div>
-                                                                            }
-                                                                        </div>
-                                                                    </Fragment>
-                                                                ) : this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['type_category'] === 'url' ? (
-                                                                    <Fragment>
-                                                                        <a href={this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['value']} target='_blank'>{this.state.currentNode['data']['inputs'][this.state.currentNode['data']['input_order'][this.state.currentNode['data']['input_stage_idx']]]['name']}</a>
-
-                                                                    </Fragment>
-                                                                ) : null
-                                                    )
-
-                                            }
-
-                                        </div>
-                                        <div className='action'>
-                                            <button onClick={() => this.submit(this.state.currentNode, this.state.prevNode)}>Submit</button>
-                                        </div>
-                                    </div>
-                                </span>
-
-                            </div>
-                        </div>
-                        {this.state.nextNode &&
-
-                            <div className={`side-item-wrap after ${this.state.hasMoreAfter ? 'more' : ''}`}>
-                                <i className='link' data-tip="hello world" />
-                                <div className='analysis-item' onClick={() => this.moveFocus(1)} >
-                                    <div className='card shadow1 clickable'>
-                                        <div className='header column'>
-                                            <h4>{this.state.nextNode.data.name}</h4>
-                                            <div className='subheader'>
-                                                <SanitizeHtml html={this.state.nextNode.data.description} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-
-                            </div>
-                            || <div className={`side-item-wrap after`}><button className='icon-button' onClick={() => Router.push({
-                                pathname: '/share',
-                                query: {
-                                    referrer: this.state.currentNodeIdx,
-                                    link_type: link_type_enum.output,
-                                }
-                            })}><i className="material-icons">
-                                    add_circle_outline
-                        </i></button></div>
-                        }
-
-                    </span>
-
-
-                }
-            </div>
+      if (!currentNode) {
+        throw new Error(
+          `Couldn't find component for referrer_id: ${referrerComponentID}`
         );
+      }
 
+      if (newComponentType == link_type_enum.input) {
+        linkNodes(newNode, currentNode);
+      } else {
+        linkNodes(currentNode, newNode);
+      }
     }
+
+    this.updateStateForNewComponent(currentNode);
+  };
+
+  componentDidMount() {
+    window.addEventListener("keydown", this.keyListener);
+
+    this._callbackId = addCallback(events.analyses, data =>
+      this.set(
+        data,
+        (this.props as any).router.query.id,
+        (this.props as any).router.query.referrer,
+        (this.props as any).router.query.link_type
+      )
+    );
+  }
+
+  componentWillUnmount() {
+    removeCallback(events.analyses, this._callbackId);
+    window.removeEventListener("keydown", this.keyListener);
+  }
+
+  componentDidUpdate(prevProps) {
+    // const test = `{
+    //     "$schema": "http://json-schema.org/draft-06/schema#",
+
+    //     "definitions": {
+    //       "address": {
+    //         "type": "object",
+    //         "properties": {
+    //           "street_address": { "type": "string" },
+    //           "city":           { "type": "string" },
+    //           "state":          { "type": "string" }
+    //         },
+    //         "required": ["street_address", "city", "state"]
+    //       }
+    //     },
+
+    //     "type": "object",
+
+    //     "properties": {
+    //       "billing_address": { "$ref": "#/definitions/address" },
+    //       "shipping_address": {
+    //         "allOf": [
+    //           { "$ref": "#/definitions/address" },
+    //           { "properties":
+    //             { "type": { "enum": [ "residential", "business" ] } },
+    //             "required": ["type"]
+    //           }
+    //         ]
+    //       }
+    //     }
+    //   }`;
+
+    // console.info("JSON PARSED", JSON.parse(test));
+    const { query } = (this.props as any).router;
+    console.info("query", query);
+    // verify props have changed to avoid an infinite loop
+    if (query.id !== prevProps.router.query.id) {
+      this.set(data.analyses, query.id, query.referrer, query.link_type);
+    }
+
+    // if (
+    //   !this.state.running &&
+    //   this.state.currentNode !== prevState.currentNode
+    // ) {
+    //   if (checkInputsCompleted(this.state.currentNode)) {
+    //     this.submit(this.state.currentNode);
+    //   }
+    // }
+  }
+
+  // checkSetNodeCompleted(node) {
+  //   const completed = checkInputsCompleted(node);
+
+  //   this.setState(() => ({
+  //     currentNodeInputCompleted: completed
+  //   }));
+  // }
+
+  handleInputSelected(input: any, value: string) {
+    this.setState(({ currentNode }: state) => {
+      const job = Object.assign({}, currentNode);
+      const jobData = job;
+
+      input.value = value;
+      jobData.spec.input_stage_idx += 1;
+
+      const inputKey = jobData.spec.input_order[jobData.spec.input_stage_idx];
+      console.info("input key", inputKey);
+      jobData.spec.input_stage = {
+        ref: jobData.inputs[inputKey],
+        inputKey
+      };
+
+      console.info("SELECTED", jobData.spec.input_stage);
+      return {
+        currentNode: job,
+        currentNodeInputs: jobData.inputs
+      };
+    });
+  }
+
+  moveFocus = (newFocusId: string) =>
+    this.updateStateForNewComponent(getNode(newFocusId));
+
+  render() {
+    return (
+      <div id="anayses-item-page" className="centered l-flex">
+        {!this.state.currentNode ? (
+          <div>Loading</div>
+        ) : (
+          <span
+            id="analysis-chain"
+            className="l-fg3"
+            style={{ display: "flex", alignItems: "center" }}
+          >
+            {this.state.prevNodesDepth1 ? (
+              <React.Fragment>
+                <div
+                  // onClick={() => this.moveFocus(this.state.prevNodesDepth1)}
+                  className={`side-item-wrap before ${
+                    this.state.hasMoreBefore ? "more" : ""
+                  } ${this.state.highlightPrevious ? "highlight" : ""}`}
+                  style={{ position: "relative" }}
+                >
+                  <div style={{ flexDirection: "column" }}>
+                    <div className="analysis-item">
+                      {Object.keys(this.state.prevNodesDepth1).map(id => (
+                        <div
+                          className="card shadow1 clickable"
+                          key={id}
+                          onClick={() => this.moveFocus(id)}
+                        >
+                          <div className="header column">
+                            <h4>{getNode(id).description.title}</h4>
+                            <div className="subheader">
+                              <SanitizeHtml
+                                html={getNode(id).description.subtitle}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <i className="link" data-tip="hello world" />
+                </div>
+              </React.Fragment>
+            ) : (
+              <div className={`side-item-wrap before`}>
+                <button
+                  disabled={!this.state.currentNodeInputs}
+                  className="icon-button"
+                  onClick={() =>
+                    Router.push({
+                      pathname: "/share",
+                      query: {
+                        referrer: this.state.currentNode.jobID,
+                        link_type: link_type_enum.input
+                      }
+                    })
+                  }
+                >
+                  <i className="material-icons">add_circle_outline</i>
+                </button>
+              </div>
+            )}
+            <div className="center-item-wrap">
+              <div className="analysis-item">
+                <div
+                  className="row header"
+                  style={{ marginTop: 0, display: "flex" }}
+                >
+                  <div className="description">
+                    <div className="title">
+                      <h2>{this.state.currentNodeDescription.title}</h2>
+                      <button
+                        style={{ cursor: "pointer" }}
+                        className="icon-button"
+                        onClick={() =>
+                          this.setState((old: state) => ({
+                            expanded: !old.expanded
+                          }))
+                        }
+                      >
+                        <i className="fas fa-sliders-h"></i>
+                      </button>
+                    </div>
+
+                    {this.state.currentNodeDescription.subtitle ? (
+                      <div className="subheader">
+                        <SanitizeHtml
+                          html={this.state.currentNodeDescription.subtitle}
+                        />
+                        <button
+                          className="icon-button"
+                          onClick={() =>
+                            this.setState((old: state) => ({
+                              expanded: !old.expanded
+                            }))
+                          }
+                        >
+                          <i
+                            className={`material-icons ${
+                              this.state.expanded ? "rotate-180" : null
+                            }`}
+                            aria-label="details"
+                          >
+                            expand_more
+                          </i>
+                        </button>
+                      </div>
+                    ) : null}
+                    <span
+                      style={{
+                        display: this.state.expanded ? "initial" : "none"
+                      }}
+                    >
+                      <div className="subheader">
+                        <a
+                          href={
+                            this.state.currentNodeDescription.authorGithubLink
+                          }
+                        >
+                          <b>{this.state.currentNodeDescription.author}</b>
+                        </a>
+                      </div>
+                      <div className="subheader">
+                        <a href={this.state.currentNodeDescription.githubLink}>
+                          <b>Project Github Link</b>
+                        </a>
+                      </div>
+                      <div className="subheader">
+                        <a href={this.state.currentNodeDescription.dockerUrl}>
+                          <b>Dockerfile</b>
+                        </a>
+                      </div>
+                    </span>
+                  </div>
+                </div>
+
+                <span
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    flexDirection: "column"
+                  }}
+                >
+                  <div className="card shadow1">
+                    {!this.state.currentNodeInputs ? (
+                      "No inputs"
+                    ) : isSubmitted(this.state.currentNode) ? (
+                      <JobProgress node={this.state.currentNode} />
+                    ) : this.state.currentNodeSpec.input_stage.ref.spec
+                        .category == "assembly" ? (
+                      <GenomeSelector
+                        species={
+                          this.state.currentNodeSpec.input_stage.ref.spec.schema
+                            .species as any
+                        }
+                        assemblies={
+                          this.state.currentNodeSpec.input_stage.ref.spec.schema
+                            .assemblies
+                        }
+                        onSelected={assembly =>
+                          this.handleInputSelected(
+                            this.state.currentNodeSpec.input_stage.ref,
+                            assembly
+                          )
+                        }
+                      />
+                    ) : this.state.currentNodeSpec.input_stage.ref.spec.type ===
+                      "file" ? (
+                      <React.Fragment>
+                        <div className="column">
+                          <h3>
+                            {
+                              this.state.currentNodeSpec.input_stage.ref
+                                .description.title
+                            }
+                          </h3>
+                          <div className="subheader">
+                            <SanitizeHtml
+                              html={
+                                this.state.currentNodeSpec.input_stage.ref
+                                  .description.subtitle
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="content">
+                          {this.state.currentNodeSpec.input_stage.ref.value !==
+                          null ? (
+                            this.state.currentNodeSpec.input_stage.ref.value
+                              .ref ? (
+                              <div className="row">
+                                <ol>
+                                  <li>
+                                    {"1. "}
+                                    <a
+                                      className="link-component "
+                                      href="#"
+                                      onMouseOver={() =>
+                                        this.setState(() => ({
+                                          highlightPrevious: true
+                                        }))
+                                      }
+                                      onMouseLeave={() =>
+                                        this.setState(() => ({
+                                          highlightPrevious: false
+                                        }))
+                                      }
+                                      onClick={() =>
+                                        this.moveFocus(
+                                          this.state.currentNodeSpec.input_stage
+                                            .ref.value.ref
+                                        )
+                                      }
+                                    >
+                                      {
+                                        this.state.currentNodeSpec.input_stage
+                                          .ref.value.ref
+                                      }
+                                      /outputs/
+                                      {
+                                        this.state.currentNodeSpec.input_stage
+                                          .ref.value.outputKey
+                                      }
+                                    </a>
+                                    <button
+                                      className="icon-button"
+                                      onClick={() =>
+                                        this.removeLink(
+                                          this.state.currentNodeSpec.input_stage
+                                            .inputKey
+                                        )
+                                      }
+                                    >
+                                      <i
+                                        className="material-icons"
+                                        aria-label="cancel"
+                                      >
+                                        cancel
+                                      </i>
+                                    </button>
+                                  </li>
+                                </ol>
+                              </div>
+                            ) : null
+                          ) : (
+                            <div
+                              className="row centered"
+                              style={{
+                                width: 150,
+                                justifyContent: "space-around",
+                                alignItems: "center"
+                              }}
+                            >
+                              <button className="icon-button">
+                                <i className="material-icons">cloud_upload</i>
+                              </button>
+                              <span>or</span>
+                              <button className="icon-button">
+                                <i
+                                  className="material-icons"
+                                  onClick={() =>
+                                    Router.push({
+                                      pathname: "/share",
+                                      query: {
+                                        referrer: this.state.currentNode.jobID,
+                                        link_type: link_type_enum.input
+                                      }
+                                    })
+                                  }
+                                >
+                                  link
+                                </i>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </React.Fragment>
+                    ) : null}
+                  </div>
+                  <div
+                    id="submission-controls"
+                    style={{ justifyContent: "center" }}
+                  >
+                    {/* <button
+                      className="icon-button"
+                      disabled={!this.state.prevNodesDepth1}
+                      onClick={() =>
+                        this.moveFocus(
+                          Object.keys(this.state.prevNodesDepth1)[0]
+                        )
+                      }
+                    >
+                      <i className="material-icons">keyboard_arrow_left</i>
+                    </button> */}
+
+                    <button
+                      className="icon-button"
+                      disabled={
+                        !this.state.currentNodeInputCompleted ||
+                        runningOrSubmitted(this.state.currentNode)
+                      }
+                      onClick={() => this.submit(this.state.currentNode)}
+                    >
+                      <i className="material-icons">directions_run</i>
+                    </button>
+
+                    {/* <button
+                      className="icon-button"
+                      disabled={!this.state.nextNodesDepth1}
+                      onClick={() =>
+                        this.moveFocus(
+                          Object.keys(this.state.nextNodesDepth1)[0]
+                        )
+                      }
+                    >
+                      <i className="material-icons">keyboard_arrow_right</i>
+                    </button> */}
+                  </div>
+                </span>
+              </div>
+            </div>
+            {(this.state.nextNodesDepth1 && (
+              <div
+                className={`side-item-wrap after ${
+                  this.state.hasMoreAfter ? "more" : ""
+                }`}
+              >
+                <i className="link" />
+                <React.Fragment>
+                  <div className="analysis-item">
+                    {Object.keys(this.state.nextNodesDepth1).map(id => (
+                      <div
+                        className="card shadow1 clickable"
+                        key={id}
+                        onClick={() => this.moveFocus(id)}
+                      >
+                        <div className="header column">
+                          <h4>{getNode(id).description.title}</h4>
+                          <div className="subheader">
+                            <SanitizeHtml
+                              html={getNode(id).description.subtitle}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </React.Fragment>
+                {/* <div
+                  className="analysis-item"
+                  onClick={() => this.moveFocus(1)}
+                >
+                  <div className="card shadow1 clickable">
+                    <div className="header column">
+                      <h4>
+                        {this.state.nextNodesDepth1.description.title}
+                      </h4>
+                      <div className="subheader">
+                        <SanitizeHtml
+                          html={
+                            this.state.nextNodesDepth1.description.subtitle
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div> */}
+              </div>
+            )) || (
+              <div className={`side-item-wrap after`}>
+                <button
+                  className="icon-button"
+                  onClick={() =>
+                    Router.push({
+                      pathname: "/share",
+                      query: {
+                        referrer: this.state.currentNode.jobID,
+                        link_type: link_type_enum.output
+                      }
+                    })
+                  }
+                >
+                  <i className="material-icons">add_circle_outline</i>
+                </button>
+              </div>
+            )}
+          </span>
+        )}
+      </div>
+    );
+  }
 }
 
 export default withRouter(Item);
+
+//SNIPPETS
+{
+  /* <div
+  className={`side-item-wrap stacked-cards before ${
+    this.state.hasMoreBefore ? "more" : ""
+  } ${this.state.highlightPrevious ? "highlight" : ""}`}
+>
+  <div className="container">
+    <div className="card-stack">
+      <a className="buttons prev" href="#"></a>
+      <ul className="card-list">
+        <li
+          className="card shadow1"
+          style={{ backgroundColor: "#4CD964" }}
+        ></li>
+        <li
+          className="card shadow1"
+          style={{ backgroundColor: "#FFCC00" }}
+        ></li>
+        <li
+          className="card shadow1"
+          style={{ backgroundColor: "#FF3B30" }}
+        ></li>
+        <li
+          className="card shadow1"
+          style={{ backgroundColor: "#34AADC" }}
+        ></li>
+        <li
+          className="card shadow1"
+          style={{ backgroundColor: "#FF9500" }}
+        ></li>
+      </ul>
+      <a className="buttons next" href="#"></a>
+    </div>
+  </div>
+</div>; */
+}
