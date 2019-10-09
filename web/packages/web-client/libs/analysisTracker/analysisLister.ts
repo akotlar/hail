@@ -350,7 +350,7 @@ const available = [
           category: "vcf",
           type: "file",
           assembly: {
-            value: "GRCh37"
+            value: ["GRCh37", "hg19"]
           }
         },
         description: {

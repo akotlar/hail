@@ -2,6 +2,12 @@
 
 
 #theme-site {
+  .row {
+    &.space-between {
+      justify-content: space-between;
+    }
+  }
+
   .card {
     min-width: $atom-width;
     max-width: $atom-width * 6;
@@ -12,6 +18,10 @@
     padding: 1rem 1.25rem;
     /*https://codepen.io/BastianAndre/pen/PzwEYe*/
 
+    &.column,
+    .column {
+      flex-direction: column;
+    }
 
     &.clickable {
       transition: all 0.3s cubic-bezier(.25, .8, .25, 1);
@@ -51,6 +61,7 @@
     }
 
 
+
     .content {
       padding: 0px;
       margin-top: 16px;
@@ -68,10 +79,6 @@
 
       margin: 1rem 1.25rem;
       flex: 1 1 auto;
-
-      &.column {
-        flex-direction: column;
-      }
 
       // +.content {
       //   margin-top: 0px;

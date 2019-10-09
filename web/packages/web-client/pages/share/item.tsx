@@ -127,7 +127,9 @@ import {
   submit,
   checkInputsCompleted,
   isSubmitted,
-  runningOrSubmitted
+  runningOrSubmitted,
+  removeNextNode,
+  removePreviousNode
   // batchEvents,
   // unCycleAll
 } from "../../libs/analysisTracker/analysisBuilder";
@@ -309,8 +311,8 @@ class Item extends React.PureComponent {
     }));
   };
 
-  removeLink = (inputKey: string) => {
-    const node = removeLinkByInput(this.state.currentNode, inputKey);
+  removeLink = (item: analysisItem, inputKey: string) => {
+    const node = removeLinkByInput(item, inputKey);
     this.updateStateForNewComponent(node);
   };
 
@@ -444,6 +446,17 @@ class Item extends React.PureComponent {
   //     currentNodeInputCompleted: completed
   //   }));
   // }
+  removePreviousNode(e: any, id: string) {
+    removePreviousNode(this.state.currentNode, id);
+    this.updateStateForNewComponent(this.state.currentNode);
+    e.stopPropagation();
+  }
+
+  removeNextNode(e: any, id: string) {
+    removeNextNode(this.state.currentNode, id);
+    this.updateStateForNewComponent(this.state.currentNode);
+    e.stopPropagation();
+  }
 
   handleInputSelected(input: any, value: string) {
     this.setState(({ currentNode }: state) => {
@@ -499,8 +512,27 @@ class Item extends React.PureComponent {
                           key={id}
                           onClick={() => this.moveFocus(id)}
                         >
-                          <div className="header column">
-                            <h4>{getNode(id).description.title}</h4>
+                          <div className="column">
+                            <span
+                              className="row space-between"
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between"
+                              }}
+                            >
+                              <h4>{getNode(id).description.title}</h4>
+                              <button
+                                className="icon-button"
+                                onClick={e => this.removePreviousNode(e, id)}
+                              >
+                                <i
+                                  className="material-icons"
+                                  aria-label="cancel"
+                                >
+                                  cancel
+                                </i>
+                              </button>
+                            </span>
                             <div className="subheader">
                               <SanitizeHtml
                                 html={getNode(id).description.subtitle}
@@ -700,6 +732,7 @@ class Item extends React.PureComponent {
                                       className="icon-button"
                                       onClick={() =>
                                         this.removeLink(
+                                          this.state.currentNode,
                                           this.state.currentNodeSpec.input_stage
                                             .inputKey
                                         )
@@ -808,8 +841,25 @@ class Item extends React.PureComponent {
                         key={id}
                         onClick={() => this.moveFocus(id)}
                       >
-                        <div className="header column">
-                          <h4>{getNode(id).description.title}</h4>
+                        <div className="column">
+                          <span
+                            className="row space-between"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between"
+                            }}
+                          >
+                            <h4>{getNode(id).description.title}</h4>
+                            <button
+                              className="icon-button"
+                              onClick={e => this.removeNextNode(e, id)}
+                            >
+                              <i className="material-icons" aria-label="cancel">
+                                cancel
+                              </i>
+                            </button>
+                          </span>
+
                           <div className="subheader">
                             <SanitizeHtml
                               html={getNode(id).description.subtitle}

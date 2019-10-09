@@ -319,7 +319,15 @@ function checkAssembliesCompatible(
   const iAssembly = extractRefPath(allInputs, inputAssembly);
   console.info("extracted path", iAssembly);
   console.info("TRUE?", allInputs, "inputAssembly", inputAssembly);
+
   if (iAssembly.value === outputAssembly.value) {
+    return true;
+  }
+
+  if (
+    Array.isArray(outputAssembly.value) &&
+    outputAssembly.value.includes(iAssembly.value)
+  ) {
     return true;
   }
 
@@ -435,6 +443,36 @@ export const removeLinkByInput = (
   // console.info('prevKey after remove node', prev)
 };
 
+export const removeNextNode = (
+  currentItem: analysisItem,
+  id: string
+): analysisItem => {
+  delete currentItem.next[id];
+
+  if (Object.keys(currentItem.next).length == 0) {
+    currentItem.next = null;
+  }
+
+  return currentItem;
+};
+
+export const removePreviousNode = (
+  currentItem: analysisItem,
+  id: string
+): analysisItem => {
+  currentItem.previous[id].inputKeys.forEach(inputKey => {
+    currentItem.inputs[inputKey].value = null;
+  });
+
+  delete currentItem.previous[id];
+
+  if (Object.keys(currentItem.previous).length == 0) {
+    currentItem.previous = null;
+  }
+
+  return currentItem;
+};
+
 // export const hasMorePrevious = ()
 // TODO
 // For file types that contain schemas (i.e vcf)
@@ -491,7 +529,10 @@ export const linkNodes = (
 
           // The schema coming from the preceeding component must be equal, or a superset
           // of the current component, which it will be serving
-          if (schemaIn !== "any" && !isMatch(schemaOut, schemaIn)) {
+          if (
+            !assembliesCompatible ||
+            (schemaIn !== "any" && !isMatch(schemaOut, schemaIn))
+          ) {
             throw new Error("Incompatible");
           }
         }
