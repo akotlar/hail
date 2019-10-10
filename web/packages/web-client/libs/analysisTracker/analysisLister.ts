@@ -191,22 +191,14 @@ const available = [
                   name: "hg19",
                   value: {
                     value: "hg19",
-                    aliases: [
-                      {
-                        value: "GRCh37"
-                      }
-                    ]
+                    aliases: ["GRCh37"]
                   }
                 },
                 {
                   name: "hg38",
                   value: {
                     value: "hg38",
-                    aliases: [
-                      {
-                        value: "GRCh38"
-                      }
-                    ]
+                    aliases: ["GRCh38"]
                   }
                 }
               ]
@@ -350,7 +342,7 @@ const available = [
           category: "vcf",
           type: "file",
           assembly: {
-            value: ["GRCh37", "hg19"]
+            value: "GRCh37"
           }
         },
         description: {
@@ -433,7 +425,7 @@ const available = [
           description: `<span>Accepts <a href='http://vcf.com' target='_blank'>VCF</a></span>`,
           category: "vcf",
           type: "file",
-          assembly: ["hg19", "GRCh37"]
+          assembly: "GRCh37"
         },
 
         // value, or a symlink which other tasks this comes from

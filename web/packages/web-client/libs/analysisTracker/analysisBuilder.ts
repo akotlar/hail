@@ -311,23 +311,46 @@ export const submit = (
   );
 };
 
-function checkAssembliesCompatible(
+function checkAssembliesCompatibleSetIfMissing(
   allInputs: any,
   inputAssembly: any,
   outputAssembly: any
 ) {
+  console.info("input", inputAssembly, outputAssembly);
   const iAssembly = extractRefPath(allInputs, inputAssembly);
-  console.info("extracted path", iAssembly);
-  console.info("TRUE?", allInputs, "inputAssembly", inputAssembly);
+
+  if (iAssembly.value === null) {
+    for (let i = 0; i < iAssembly.spec.schema.assemblies.length; i++) {
+      const specie = iAssembly.spec.schema.assemblies[i];
+      console.info("specie", specie);
+      for (let j = 0; j < specie.length; j++) {
+        const val = specie[j].value.value;
+        const aliases = specie[j].value.aliases;
+        console.info(
+          "aliases",
+          aliases,
+          outputAssembly.value,
+          aliases.includes("GRCh37")
+        );
+        if (
+          val === outputAssembly.value ||
+          (aliases && aliases.includes(outputAssembly.value))
+        ) {
+          iAssembly.value = val;
+          console.info("FOUND", iAssembly, allInputs);
+          return true;
+        }
+      }
+    }
+    console.info("Not found", outputAssembly);
+    return false;
+  }
 
   if (iAssembly.value === outputAssembly.value) {
     return true;
   }
 
-  if (
-    Array.isArray(outputAssembly.value) &&
-    outputAssembly.value.includes(iAssembly.value)
-  ) {
+  if (iAssembly.aliases.includes(outputAssembly.value)) {
     return true;
   }
 
@@ -335,11 +358,9 @@ function checkAssembliesCompatible(
 }
 
 function extractRefPath(allInputs: any, inputChild: any) {
-  console.info("ref", inputChild);
   const ref = inputChild["$ref"] || inputChild["ref"];
 
   if (ref === undefined) {
-    console.info("NO REF");
     if (inputChild.value === undefined) {
       throw new Error("No value or ref");
     }
@@ -512,11 +533,13 @@ export const linkNodes = (
           const schemaIn = currentInput.spec.schema;
           const schemaOut = output.spec.schema;
 
-          const assembliesCompatible = checkAssembliesCompatible(
+          const assembliesCompatible = checkAssembliesCompatibleSetIfMissing(
             rightItem.inputs,
             currentInput.spec.assembly,
             output.spec.assembly
           );
+
+          console.info("right item", rightItem);
 
           console.info(
             "schemaIn",

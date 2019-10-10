@@ -9,6 +9,9 @@ type Props = {
 
 type state = {
   idx: number;
+  chosenSpecie?: string;
+  chosenAssembly?: string;
+  assemblySpec: any;
   selectedAssembly?: string;
   species: string[];
   assemblies: { name: string; value: { value: string; aliases: string[] } }[][];
@@ -17,6 +20,7 @@ type state = {
 };
 class GenomeSelector extends PureComponent<Props> {
   state: state = {
+    assemblySpec: null,
     selectedAssembly: null,
     idx: 0,
     species: [],
@@ -28,10 +32,13 @@ class GenomeSelector extends PureComponent<Props> {
   constructor(props: any) {
     super(props);
 
+    this.state.assemblySpec = this.props.assemblySpec;
     this.state.assemblies = props.assemblies;
     this.state.species = props.species;
     this.state.cb = props.onSelected;
     this.state.idx = 0;
+
+    this.state.chosenAssembly = this.state.assemblySpec.value;
 
     console.info("PROPS", props.assemblies);
 

@@ -654,6 +654,9 @@ class Item extends React.PureComponent {
                     ) : this.state.currentNodeSpec.input_stage.ref.spec
                         .category == "assembly" ? (
                       <GenomeSelector
+                        assemblySpec={
+                          this.state.currentNodeSpec.input_stage.ref
+                        }
                         species={
                           this.state.currentNodeSpec.input_stage.ref.spec.schema
                             .species as any
@@ -662,6 +665,7 @@ class Item extends React.PureComponent {
                           this.state.currentNodeSpec.input_stage.ref.spec.schema
                             .assemblies
                         }
+                        value={}
                         onSelected={assembly =>
                           this.handleInputSelected(
                             this.state.currentNodeSpec.input_stage.ref,
