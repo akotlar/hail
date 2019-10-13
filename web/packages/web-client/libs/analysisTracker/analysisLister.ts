@@ -139,30 +139,6 @@ const available = [
       distribution_type: "map",
       type: "annotation"
     },
-    // json schema
-    // definitions: {
-    //   inputs: {
-    //     assembly: {
-    //       category: "assembly",
-    //       type: "string",
-    //       schema: {
-    //         species: ["Human"],
-    //         assemblies: [
-    //           [
-    //             {
-    //               name: "hg19",
-    //               value: "hg19"
-    //             },
-    //             {
-    //               name: "hg38",
-    //               value: "hg38"
-    //             }
-    //           ]
-    //         ]
-    //       }
-    //     }
-    //   }
-    // },
     submission: {
       state: "not_submitted",
       last_error: "",
@@ -218,9 +194,8 @@ const available = [
           assembly: {
             $ref: "#/inputs/assembly"
           },
-          accepted_protocols: ["file://", "s3://", "gs://"],
-          compression_accepted: ["gz", "bgz"],
-          reduce_multiple: false // means map
+          protocols_accepted: ["file://", "s3://", "gs://"],
+          compression_accepted: ["gz", "bgz"]
         },
         description: {
           title: "Upload to Submit",

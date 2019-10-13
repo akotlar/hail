@@ -32,13 +32,13 @@ class GenomeSelector extends PureComponent<Props> {
   constructor(props: any) {
     super(props);
 
-    this.state.assemblySpec = this.props.assemblySpec;
+    // this.state.assemblySpec = this.props.assemblySpec;
     this.state.assemblies = props.assemblies;
     this.state.species = props.species;
     this.state.cb = props.onSelected;
     this.state.idx = 0;
 
-    this.state.chosenAssembly = this.state.assemblySpec.value;
+    // this.state.chosenAssembly = this.state.assemblySpec.value;
 
     console.info("PROPS", props.assemblies);
 
