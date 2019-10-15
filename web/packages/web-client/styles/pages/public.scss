@@ -1,8 +1,6 @@
 @import "../variables.scss";
 
 #theme-site {
-  position: relative;
-
   #public-page {
     width: 100%;
     display: flex;
@@ -10,6 +8,11 @@
     align-content: space-between;
     min-height: $content-height;
     justify-content: center;
+    background-color: inherit;
+
+    .right {
+      margin-left: 5px;
+    }
 
     #left-list {
       max-width: 420px;
@@ -26,6 +29,7 @@
 
     #right-list {
       width: 640px;
+      background-color: inherit;
 
       height: 100%;
 
@@ -48,78 +52,72 @@
       //   margin: -10px;
       // }
     }
-  }
 
-  #click-handler {
-    width: 100%;
-    position: absolute;
-    display: block;
-    top: 0;
-    left: 0;
-    height: 100%;
-  }
 
-  #control-center {
-    display: flex;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    padding-top: 20px;
-    width: 100%;
-    background: white;
-    z-index: 999;
-
-    #delete {
-      margin-right: 1rem;
+    #click-handler {
+      width: 100%;
+      position: absolute;
+      display: block;
+      top: 0;
+      left: 0;
+      height: 100%;
     }
-  }
 
-  &.centered {
-    margin-top: 0px;
-  }
-
-  .card {
-    width: 100%;
-
-    .header {
+    #control-center {
       display: flex;
-      justify-content: space-between;
-    }
-  }
+      align-items: center;
+      position: sticky;
+      top: 0;
+      width: 100%;
+      background: inherit;
+      z-index: 999;
+      flex-direction: column;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+      padding: 0px;
 
-  #control-center {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  #control-center {
-    margin-bottom: 1.5rem;
-
-  }
-
-  #public-search {
-    width: 100%;
-    box-shadow: 0 3px 3px 0 rgba(0, 0, 0, 0.25), 0 1px 1px 0 rgba(0, 0, 0, 0.25), 0 2px 1px -1px rgba(0, 0, 0, 0.25);
-    padding: 1rem;
-    border-radius: $border-radius;
-    font-size: 1rem;
-
-    // margin-left: .75rem;
-    &:focus {
-      border-color: $blue;
-    }
-
-    &::placeholder {
-      color: black;
-      font-weight: 500;
-    }
-
-    &:focus {
-      &::placeholder {
-        color: $gray;
-        font-weight: 300;
+      #delete {
+        margin-right: 1rem;
       }
     }
 
+    &.centered {
+      margin-top: 0px;
+    }
+
+    .card {
+      width: 100%;
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+      }
+    }
+
+    #public-search {
+      width: 100%;
+      padding: 1rem;
+      border-radius: $border-radius;
+      font-size: 1rem;
+      border: 0px;
+      color: inherit;
+      border-color: inherit;
+
+      // margin-left: .75rem;
+      &:focus {
+        border-color: $blue;
+      }
+
+      &::placeholder {
+        color: inherit;
+        font-weight: 500;
+      }
+
+      &:focus {
+        &::placeholder {
+          font-weight: 300;
+        }
+      }
+    }
   }
 }

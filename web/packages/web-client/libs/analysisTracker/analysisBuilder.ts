@@ -106,6 +106,8 @@ type analyses = {
 
 let allNodes: analyses = {};
 
+export let totalNodeSteps: number = 0;
+
 export const isSubmitted = (node: any) => {
   return node.submission.state !== "not_submitted";
 };
@@ -128,6 +130,14 @@ export const runningOrCompleted = (node: any) => {
   );
 };
 
+export const completed = (node: any) => {
+  return node.submission.state === "completed";
+};
+
+export const failed = (node: any) => {
+  return node.submission.state === "failed";
+};
+
 export const runningOrSubmitted = (node: any) => {
   return (
     node.submission.state !== batchStates.notSubmitted &&
@@ -138,6 +148,8 @@ export const runningOrSubmitted = (node: any) => {
 export const getNode = (jobID: string) => allNodes[jobID];
 
 export const cloneAndAddNode = (item: any): analysisItem => {
+  totalNodeSteps += 1;
+
   // TODO: avoid JSON.parse, use known schema to clone fast
   const newComponent = munge(JSON.parse(JSON.stringify(item)));
 
@@ -221,7 +233,21 @@ export const checkInputsCompleted = (item: analysisItem): boolean => {
     (input: any) => input.value !== null && input.value !== undefined
   );
 
-  console.info("res", res);
+  console.info("checkInputsCompleted result: ", res);
+
+  if (res === true) {
+    const lastInputKey =
+      item.spec.input_order[item.spec.input_order.length - 1];
+    item.spec.input_stage = {
+      ref: item.inputs[lastInputKey],
+      inputKey: lastInputKey
+    };
+
+    item.spec.input_stage_idx = item.spec.input_order.length - 1;
+    item.spec.input_completed = true;
+
+    console.info("item.spec.input_stage new", item.spec.input_stage);
+  }
   return res;
 };
 
@@ -283,20 +309,9 @@ export const submit = (
       // TODO: only resolve if return status is 2xx
       .then(jobsArray => {
         // TODO: do this for every id returned
-        // currentNode.progress = {
-        //   started: true,
-        //   submitted: true,
-        //   failed: false,
-        //   completed: false
-        // };
-        console.info("jobsArray, ", jobsArray);
 
         jobsArray.forEach(job => {
-          console.info("JOB in array", job, job.jobID);
-          console.info("stuff", allNodes[job.jobID]);
           allNodes[job.jobID] = Object.assign(allNodes[job.jobID], job);
-
-          console.info("AFTER", allNodes[job.jobID]);
         });
 
         return currentNode;
@@ -312,89 +327,120 @@ export const submit = (
 };
 
 function checkAssembliesCompatibleSetIfMissing(
-  allInputs: any,
+  item: any,
   inputAssembly: any,
   outputAssembly: any
 ) {
-  console.info("input", inputAssembly, outputAssembly);
-  const iAssembly = extractRefPath(allInputs, inputAssembly);
+  const requiredAssembly = outputAssembly.value;
 
-  if (iAssembly.value === null) {
-    for (let i = 0; i < iAssembly.spec.schema.assemblies.length; i++) {
-      const specie = iAssembly.spec.schema.assemblies[i];
-      console.info("specie", specie);
-      for (let j = 0; j < specie.length; j++) {
-        const val = specie[j].value.value;
-        const aliases = specie[j].value.aliases;
-        console.info(
-          "aliases",
-          aliases,
-          outputAssembly.value,
-          aliases.includes("GRCh37")
-        );
-        if (
-          val === outputAssembly.value ||
-          (aliases && aliases.includes(outputAssembly.value))
-        ) {
-          iAssembly.value = val;
-          console.info("FOUND", iAssembly, allInputs);
-          return true;
-        }
+  let iAssembly;
+  if (
+    inputAssembly.value !== null &&
+    typeof inputAssembly === "object" &&
+    inputAssembly.ref
+  ) {
+    iAssembly = extractRefPath(allNodes, item, inputAssembly.ref);
+  } else {
+    iAssembly = inputAssembly.value;
+  }
+
+  if (iAssembly[0] === null) {
+    for (let i = 0; i < iAssembly[0].spec.schema.length; i++) {
+      const entry = iAssembly[0].spec.schema[i];
+      const specie = entry.specie;
+      const assemblies = entry.assemblies;
+
+      console.info("specie", specie, assemblies);
+
+      if (assemblies[requiredAssembly]) {
+        iAssembly[0].value = {
+          assembly: requiredAssembly,
+          specie,
+          aliases: assemblies[requiredAssembly].aliases
+        };
+        return true;
       }
+
+      const assembly = Object.keys(assemblies).find(assembly => {
+        console.info(
+          "checking",
+          assembly,
+          assemblies[assembly].aliases,
+          requiredAssembly,
+          assemblies[assembly].aliases.includes(requiredAssembly),
+          assemblies[assembly].aliases[0] == requiredAssembly
+        );
+        return !!assemblies[assembly].aliases.includes(requiredAssembly);
+      });
+
+      if (assembly) {
+        iAssembly[0] = {
+          assembly,
+          specie,
+          aliases: assemblies[assembly].aliases
+        };
+
+        console.info("Found alias,", assembly, iAssembly[0]);
+        return true;
+      }
+
+      return false;
     }
     console.info("Not found", outputAssembly);
     return false;
   }
 
-  if (iAssembly.value === outputAssembly.value) {
+  if (iAssembly[0].value.assembly === outputAssembly.value) {
     return true;
   }
 
-  if (iAssembly.aliases.includes(outputAssembly.value)) {
+  if (iAssembly[0].value.aliases.includes(outputAssembly.value)) {
     return true;
   }
 
   return false;
 }
 
-function extractRefPath(allInputs: any, inputChild: any) {
-  const ref = inputChild["$ref"] || inputChild["ref"];
+export const getNodeFromRef = (node: analysisItem, ref: string) => {
+  const [, wholeJob] = extractRefPath(allNodes, node, ref);
 
-  if (ref === undefined) {
-    if (inputChild.value === undefined) {
-      throw new Error("No value or ref");
+  console.info("job", wholeJob);
+  return wholeJob;
+};
+
+function extractRefPath(allNodes, node, ref: string) {
+  console.info("ref", ref);
+  const splitRef = ref.split("/");
+
+  let job;
+  let i = 0;
+  let path = [];
+  let wholeJob: analysisItem;
+  splitRef.forEach(v => {
+    if (i == 0) {
+      if (splitRef[0] === "#") {
+        job = node;
+      } else {
+        job = allNodes[splitRef[0]];
+      }
+
+      wholeJob = job;
+      i += 1;
+      return;
     }
 
-    return inputChild.value;
-  }
+    job = job[v];
+    path.push(v);
+  });
 
-  if (!ref.startsWith("#/")) {
-    throw new Error(
-      "Ref must start with #/; only local refs accepted at this time"
-    );
-  }
-
-  console.info("ref", ref.slice(2).split("/"), allInputs);
-  let part = allInputs;
-  ref
-    .slice(2)
-    .split("/")
-    .forEach(v => {
-      if (v === "inputs") {
-        return;
-      }
-      console.info("V", v, allInputs[v]);
-
-      part = part[v];
-    });
-
-  return part;
+  return [job, wholeJob, path];
 }
 
 export const removeLinkByInput = (
   item: analysisItem,
   inputKey: string
 ): analysisItem => {
+  console.info("Removing", inputKey);
   const itemInput = item.inputs[inputKey];
   const refValue: inputRefValue = itemInput.value;
 
@@ -427,7 +473,7 @@ export const removeLinkByInput = (
   }
 
   const prevKeyIndex = previous.outputKeys.indexOf(refKey);
-
+  console.info("refKey", refKey);
   if (prevKeyIndex === -1) {
     throw new Error(`Couldn't find output key ${refKey}`);
   }
@@ -457,8 +503,33 @@ export const removeLinkByInput = (
   }
 
   itemInput.value = null;
-  console.info("ITEM after remove node", item);
-  console.info("PREV next after remove", previousNext);
+
+  if (item.spec.input_stage_idx > 0) {
+    item.spec.input_stage_idx -= 1;
+  }
+
+  if (itemInput.spec.assembly) {
+    if (itemInput.spec.assembly.ref) {
+      const iAssembly = extractRefPath(
+        allNodes,
+        item,
+        itemInput.spec.assembly.ref
+      );
+      iAssembly[0].value = null;
+
+      console.info("after", iAssembly);
+    }
+  }
+
+  console.info("input stage idx", item.spec.input_stage_idx);
+  const inputStageKey = item.spec.input_order[item.spec.input_stage_idx];
+
+  item.spec.input_stage = {
+    inputKey: inputStageKey,
+    ref: item.inputs[inputStageKey]
+  };
+
+  totalNodeSteps -= 1;
 
   return item;
   // console.info('prevKey after remove node', prev)
@@ -468,11 +539,17 @@ export const removeNextNode = (
   currentItem: analysisItem,
   id: string
 ): analysisItem => {
+  // let directToRemoveCount = Object.keys(currentItem.next);
+
+  // Object.keys(currentItem.next).forEach()
+
   delete currentItem.next[id];
 
   if (Object.keys(currentItem.next).length == 0) {
     currentItem.next = null;
   }
+
+  totalNodeSteps -= 1;
 
   return currentItem;
 };
@@ -482,8 +559,13 @@ export const removePreviousNode = (
   id: string
 ): analysisItem => {
   currentItem.previous[id].inputKeys.forEach(inputKey => {
-    currentItem.inputs[inputKey].value = null;
+    console.info("deleting from", currentItem, id);
+    removeLinkByInput(currentItem, inputKey);
   });
+
+  if (!currentItem.previous) {
+    return currentItem;
+  }
 
   delete currentItem.previous[id];
 
@@ -506,6 +588,8 @@ export const linkNodes = (
   for (const outputKey in leftItem.outputs) {
     const output = leftItem.outputs[outputKey];
     const outputType = output.spec.type;
+
+    // leftItem.rightInputsConfigured = [];
 
     let linked = false;
     for (const inputKey in rightItem.inputs) {
@@ -534,7 +618,7 @@ export const linkNodes = (
           const schemaOut = output.spec.schema;
 
           const assembliesCompatible = checkAssembliesCompatibleSetIfMissing(
-            rightItem.inputs,
+            rightItem,
             currentInput.spec.assembly,
             output.spec.assembly
           );
@@ -562,8 +646,7 @@ export const linkNodes = (
 
         // Means the ref can be filled with the value now, no need to
         rightItem.inputs[inputKey].value = {
-          ref: leftItem.jobID,
-          outputKey: outputKey
+          ref: `${leftItem.jobID}/outputs/${outputKey}`
         };
 
         if (!linked) {
@@ -645,8 +728,6 @@ function munge(data): any {
     data.spec.input_stage_idx = 0;
     data.spec.input_completed = false;
   }
-
-  console.info("stuff", data["spec"]);
 
   return data;
 }

@@ -1,5 +1,4 @@
 @import './variables.scss';
-@import './buttons.scss';
 @import './typography.scss';
 @import './input.scss';
 
@@ -11,6 +10,7 @@ html {
 *:before,
 *:after {
   box-sizing: inherit;
+  color: inherit;
 }
 
 /*** https://github.com/tobiasahlin/SpinKit ***/

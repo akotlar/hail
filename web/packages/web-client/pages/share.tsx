@@ -268,7 +268,7 @@ class Jobs extends PureComponent {
             </span>
           </span> */}
           <span id="right-list" className="list">
-            <span id="control-center">
+            <span className="card shadow1 clickable" id="control-center">
               <input
                 id="public-search"
                 className="outlined"
@@ -310,7 +310,7 @@ class Jobs extends PureComponent {
                     <h3>{job.description.title}</h3>
                     <div className="subheader">{job.description.subtitle}</div>
                     <div className="subheader">
-                      By{" "}
+                      By
                       <a className="right" href={job.description.authorUrl}>
                         {job.description.author}
                       </a>

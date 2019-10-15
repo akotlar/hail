@@ -1,24 +1,30 @@
-import { PureComponent, Fragment } from 'react';
-import Link from 'next/link';
+import { PureComponent, Fragment } from "react";
+import Link from "next/link";
 // import {
 //   logout,
 //   addListener,
 //   removeListener,
 //   // isAuthenticated
 // } from '../libs/auth0-auth';
-import { initIdTokenHandler, addCallback, removeCallback, loggedInEventName, loggedOutEventName } from '../libs/auth';
-import './Header/header.scss';
-import Router, { withRouter } from 'next/router';
-import { WithRouterProps } from 'next/dist/client/with-router';
+import {
+  initIdTokenHandler,
+  addCallback,
+  removeCallback,
+  loggedInEventName,
+  loggedOutEventName
+} from "../libs/auth";
+import "./Header/header.scss";
+import Router, { withRouter } from "next/router";
+import { WithRouterProps } from "next/dist/client/with-router";
 
-const bStyle = 'link-button';
+const bStyle = "link-button";
 
 // let listenerID: number;
 
 declare type headerState = {
   // showProfileControls: boolean,
   isLoggedIn: boolean;
-  user?: any,
+  user?: any;
 };
 
 let _loggedInCallbackId = null;
@@ -27,7 +33,7 @@ class Header extends PureComponent<WithRouterProps> {
   state: headerState = {
     // showProfileControls: false,
     isLoggedIn: false,
-    user: null,
+    user: null
   };
 
   onProfileHover = () => {
@@ -46,7 +52,7 @@ class Header extends PureComponent<WithRouterProps> {
     const handler = initIdTokenHandler();
 
     handler.logout();
-    Router.push('/');
+    Router.push("/");
   }
 
   constructor(props: any) {
@@ -61,17 +67,17 @@ class Header extends PureComponent<WithRouterProps> {
       user: handler.decodedToken
     });
 
-    _loggedInCallbackId = addCallback(loggedInEventName, (data) => {
+    _loggedInCallbackId = addCallback(loggedInEventName, data => {
       this.setState({
         user: data[0]
       });
-    })
+    });
 
     _loggedOutCallbackId = addCallback(loggedOutEventName, () => {
       this.setState({
         user: null
       });
-    })
+    });
   }
 
   componentWillUnmount() {
@@ -92,19 +98,33 @@ class Header extends PureComponent<WithRouterProps> {
     return (
       <span id="header">
         <Link href="/">
-          <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>
+          <a className={`home ${bStyle} ${pathname === "/" ? "active" : ""}`}>
             <b>/</b>
           </a>
         </Link>
         <Link href="/jobs/results?type=completed" replace>
-          <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Results</a>
+          <a
+            className={`home ${bStyle} ${
+              pathname === "/jobs/results" ? "active" : ""
+            }`}
+          >
+            Results
+          </a>
         </Link>
         <Link href="/jobs/public?type=public" replace>
-          <a className={`home ${bStyle} ${pathname === '/' ? 'active' : ''}`}>Public</a>
+          <a
+            className={`home ${bStyle} ${
+              pathname === "/jobs/public" ? "active" : ""
+            }`}
+          >
+            Public
+          </a>
         </Link>
         <Link href="/share">
           <a
-            className={`home ${bStyle} ${pathname === '/share' ? 'active' : ''}`}
+            className={`home ${bStyle} ${
+              pathname.startsWith("/share") ? "active" : ""
+            }`}
           >
             Share
           </a>
@@ -143,12 +163,12 @@ class Header extends PureComponent<WithRouterProps> {
             */}
           </Fragment>
         ) : (
-            <Link href="/login">
-              <a className={`${bStyle} ${pathname === '/login' ? 'active' : ''}`}>
-                Login
+          <Link href="/login">
+            <a className={`${bStyle} ${pathname === "/login" ? "active" : ""}`}>
+              Login
             </a>
-            </Link>
-          )}
+          </Link>
+        )}
       </span>
     );
   }

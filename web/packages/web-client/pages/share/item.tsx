@@ -4,10 +4,15 @@ import data, {
   removeCallback,
   events
 } from "../../libs/analysisTracker/analysisLister";
-import "styles/card.scss";
-import "styles/pages/public.scss";
 import "styles/pages/share/item.scss";
 import GenomeSelector from "../../components/GenomeSelector/GenomeSelector";
+
+// declare module "react" {
+//   interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+//     // extends React's HTMLAttributes
+//     custom?: string;
+//   }
+// }
 
 // import clsx from "clsx";
 // import { createStyles, makeStyles, Theme } from "@material-ui/core/styles";
@@ -129,7 +134,8 @@ import {
   isSubmitted,
   runningOrSubmitted,
   removeNextNode,
-  removePreviousNode
+  removePreviousNode,
+  getNodeFromRef
   // batchEvents,
   // unCycleAll
 } from "../../libs/analysisTracker/analysisBuilder";
@@ -244,6 +250,7 @@ class Item extends React.PureComponent {
   }
 
   submit = (currentNode: any) => {
+    console.info("about to submit", currentNode);
     // TODO: actually do somehting
     submit(currentNode, () => {
       this.setState((old: state) => ({
@@ -311,8 +318,9 @@ class Item extends React.PureComponent {
     }));
   };
 
-  removeLink = (item: analysisItem, inputKey: string) => {
-    const node = removeLinkByInput(item, inputKey);
+  removeLink = (item: analysisItem, inputStage: any) => {
+    console.info("called remove link", inputStage, item);
+    const node = removeLinkByInput(item, inputStage.inputKey);
     this.updateStateForNewComponent(node);
   };
 
@@ -459,6 +467,7 @@ class Item extends React.PureComponent {
   }
 
   handleInputSelected(input: any, value: string) {
+    console.info("value is", value);
     this.setState(({ currentNode }: state) => {
       const job = Object.assign({}, currentNode);
       const jobData = job;
@@ -481,8 +490,13 @@ class Item extends React.PureComponent {
     });
   }
 
-  moveFocus = (newFocusId: string) =>
-    this.updateStateForNewComponent(getNode(newFocusId));
+  moveFocus = (ref: string) => {
+    console.info("input stage", this.state.currentNodeSpec.input_stage);
+    console.info("new focus id", ref);
+    const node = getNodeFromRef(this.state.currentNode, ref);
+    console.info("new node", node);
+    this.updateStateForNewComponent(node);
+  };
 
   render() {
     return (
@@ -496,61 +510,74 @@ class Item extends React.PureComponent {
             style={{ display: "flex", alignItems: "center" }}
           >
             {this.state.prevNodesDepth1 ? (
-              <React.Fragment>
+              <div
+                className={`side-item-wrap before${
+                  this.state.hasMoreBefore ? "more" : ""
+                } ${this.state.highlightPrevious ? "highlight" : ""}`}
+                style={{ position: "relative" }}
+              >
                 <div
-                  // onClick={() => this.moveFocus(this.state.prevNodesDepth1)}
-                  className={`side-item-wrap before ${
-                    this.state.hasMoreBefore ? "more" : ""
-                  } ${this.state.highlightPrevious ? "highlight" : ""}`}
-                  style={{ position: "relative" }}
+                  style={{
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
                 >
-                  <div style={{ flexDirection: "column" }}>
-                    <div className="analysis-item">
-                      {Object.keys(this.state.prevNodesDepth1).map(id => (
-                        <div
-                          className="card shadow1 clickable"
-                          key={id}
-                          onClick={() => this.moveFocus(id)}
-                        >
-                          <div className="column">
-                            <span
-                              className="row space-between"
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between"
-                              }}
+                  <div className="analysis-item">
+                    {Object.keys(this.state.prevNodesDepth1).map(id => (
+                      <div
+                        className="card shadow1 clickable"
+                        key={id}
+                        onClick={() => this.moveFocus(id)}
+                      >
+                        <div className="column">
+                          <span
+                            className="row space-between"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between"
+                            }}
+                          >
+                            <h4>{getNode(id).description.title}</h4>
+                            <button
+                              className="icon-button"
+                              onClick={e => this.removePreviousNode(e, id)}
                             >
-                              <h4>{getNode(id).description.title}</h4>
-                              <button
-                                className="icon-button"
-                                onClick={e => this.removePreviousNode(e, id)}
-                              >
-                                <i
-                                  className="material-icons"
-                                  aria-label="cancel"
-                                >
-                                  cancel
-                                </i>
-                              </button>
-                            </span>
-                            <div className="subheader">
-                              <SanitizeHtml
-                                html={getNode(id).description.subtitle}
-                              />
-                            </div>
+                              <i className="material-icons" aria-label="cancel">
+                                cancel
+                              </i>
+                            </button>
+                          </span>
+                          <div className="subheader">
+                            <SanitizeHtml
+                              html={getNode(id).description.subtitle}
+                            />
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                  <i className="link" data-tip="hello world" />
                 </div>
-              </React.Fragment>
+                <i className="link">
+                  {!this.state.prevNodesDepth1.inputs ||
+                  this.state.prevNodesDepth1.inputs ? (
+                    <i
+                      className="complete material-icons"
+                      style={{ color: "green" }}
+                    >
+                      check_circle_outline
+                    </i>
+                  ) : (
+                    ""
+                  )}
+                </i>
+              </div>
             ) : (
               <div className={`side-item-wrap before`}>
                 <button
                   disabled={!this.state.currentNodeInputs}
-                  className="icon-button"
+                  data-before="Add input"
+                  className="icon-button tooltip-container tooltip-right"
                   onClick={() =>
                     Router.push({
                       pathname: "/share",
@@ -648,23 +675,40 @@ class Item extends React.PureComponent {
                 >
                   <div className="card shadow1">
                     {!this.state.currentNodeInputs ? (
-                      "No inputs"
+                      <div>
+                        <div className="header">
+                          <h3>Outputs</h3>
+                        </div>
+                        <div className="content">
+                          <ol>
+                            {Object.keys(this.state.currentNodeOutputs).map(
+                              (key, idx) => (
+                                <li
+                                  key={idx}
+                                  style={{ justifyContent: "flex-start" }}
+                                >
+                                  {idx + 1}.
+                                  <a
+                                    className="link-component"
+                                    href={
+                                      this.state.currentNodeOutputs[key].value
+                                    }
+                                    target="_blank"
+                                  >
+                                    {key}
+                                  </a>
+                                </li>
+                              )
+                            )}
+                          </ol>
+                        </div>
+                      </div>
                     ) : isSubmitted(this.state.currentNode) ? (
                       <JobProgress node={this.state.currentNode} />
                     ) : this.state.currentNodeSpec.input_stage.ref.spec
                         .category == "assembly" ? (
                       <GenomeSelector
-                        // assemblySpec={
-                        //   this.state.currentNodeSpec.input_stage.ref
-                        // }
-                        species={
-                          this.state.currentNodeSpec.input_stage.ref.spec.schema
-                            .species as any
-                        }
-                        assemblies={
-                          this.state.currentNodeSpec.input_stage.ref.spec.schema
-                            .assemblies
-                        }
+                        input={this.state.currentNodeSpec.input_stage.ref}
                         // value={}
                         onSelected={assembly =>
                           this.handleInputSelected(
@@ -738,7 +782,6 @@ class Item extends React.PureComponent {
                                         this.removeLink(
                                           this.state.currentNode,
                                           this.state.currentNodeSpec.input_stage
-                                            .inputKey
                                         )
                                       }
                                     >
@@ -762,11 +805,17 @@ class Item extends React.PureComponent {
                                 alignItems: "center"
                               }}
                             >
-                              <button className="icon-button">
+                              <button
+                                className="icon-button tooltip-container tooltip-down"
+                                data-before="Upload"
+                              >
                                 <i className="material-icons">cloud_upload</i>
                               </button>
                               <span>or</span>
-                              <button className="icon-button">
+                              <button
+                                className="icon-button tooltip-container tooltip-down"
+                                data-before="Link components"
+                              >
                                 <i
                                   className="material-icons"
                                   onClick={() =>
@@ -787,45 +836,6 @@ class Item extends React.PureComponent {
                         </div>
                       </React.Fragment>
                     ) : null}
-                  </div>
-                  <div
-                    id="submission-controls"
-                    style={{ justifyContent: "center" }}
-                  >
-                    {/* <button
-                      className="icon-button"
-                      disabled={!this.state.prevNodesDepth1}
-                      onClick={() =>
-                        this.moveFocus(
-                          Object.keys(this.state.prevNodesDepth1)[0]
-                        )
-                      }
-                    >
-                      <i className="material-icons">keyboard_arrow_left</i>
-                    </button> */}
-
-                    <button
-                      className="icon-button"
-                      disabled={
-                        !this.state.currentNodeInputCompleted ||
-                        runningOrSubmitted(this.state.currentNode)
-                      }
-                      onClick={() => this.submit(this.state.currentNode)}
-                    >
-                      <i className="material-icons">directions_run</i>
-                    </button>
-
-                    {/* <button
-                      className="icon-button"
-                      disabled={!this.state.nextNodesDepth1}
-                      onClick={() =>
-                        this.moveFocus(
-                          Object.keys(this.state.nextNodesDepth1)[0]
-                        )
-                      }
-                    >
-                      <i className="material-icons">keyboard_arrow_right</i>
-                    </button> */}
                   </div>
                 </span>
               </div>
@@ -896,8 +906,38 @@ class Item extends React.PureComponent {
               </div>
             )) || (
               <div className={`side-item-wrap after`}>
+                <div
+                  id="submission-controls"
+                  style={{ justifyContent: "center" }}
+                >
+                  {/* <button
+                      className="icon-button"
+                      disabled={!this.state.prevNodesDepth1}
+                      onClick={() =>
+                        this.moveFocus(
+                          Object.keys(this.state.prevNodesDepth1)[0]
+                        )
+                      }
+                    >
+                      <i className="material-icons">keyboard_arrow_left</i>
+                    </button> */}
+
+                  <button
+                    data-before="Run it!"
+                    className="icon-button tooltip-container tooltip-left"
+                    disabled={
+                      !this.state.currentNodeInputs ||
+                      !this.state.currentNodeInputCompleted ||
+                      runningOrSubmitted(this.state.currentNode)
+                    }
+                    onClick={() => this.submit(this.state.currentNode)}
+                  >
+                    <i className="material-icons">directions_run</i>
+                  </button>
+                </div>
                 <button
-                  className="icon-button"
+                  data-before="Add output node"
+                  className="icon-button tooltip-container tooltip-left"
                   onClick={() =>
                     Router.push({
                       pathname: "/share",

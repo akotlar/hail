@@ -114,6 +114,18 @@ import Callbacks from "../callbacks";
 // TODO: Not sure where to stick assemblies. For new jobs we may have a spec
 // that is variable on the assembly only (for instance VCF has some fields, that is the spec)
 // but the data may come from GRCh37 or 38.
+
+// For VCF files, need assembly
+// So the file has a depeendency. But not every vcf file should have to have the same assembly.
+// so we need to allow a reference to a schema, which will cause the input view to change to that of the assembly input
+// but when the user selects the assemlby, only the "assembly" property of the vcf file gets filled
+// then, we also need a mode to set 1 assembly for all files
+// in that case, there needs to be a different representation
+// maybe in the case of "default", each vcf file takes a ref as now, and there is a dynamic "assembly" field added
+// which kind of means the assembly schema needs to live at the parent/root, or need to be listed once
+// in a schema component for inputFile
+// or, like in JSON schema I think, we have a separate place for schema, which defines the schema of the input,
+// and the inputs: {} must just follow that.
 const available = [
   {
     _id: "test-1",
@@ -154,36 +166,67 @@ const available = [
       startedDate: null,
       finishedDate: null
     },
+    inputSpec: {
+      assembly: {
+        category: "assembly",
+        type: "string",
+        schema: [
+          {
+            specie: "Human",
+            assemblies: {
+              hg19: {
+                aliases: ["GRCh37"]
+              },
+              hg38: {
+                aliases: ["GRCh38"]
+              }
+            }
+          }
+        ],
+        description: {
+          title: "Choose Genome and Assembly"
+        }
+      },
+      inputFile: {
+        schema: { version: "2.11", INFO: { AC_EAS: "Int" } },
+        category: "vcf",
+        type: "file",
+        protocols_accepted: ["file://", "s3://", "gs://"],
+        compression_accepted: ["gz", "bgz"],
+        description: {
+          title: "Upload to Submit",
+          subtitle: `Accepts <a href='http://vcf.com' target='_blank'>VCF</a>`
+        },
+        dependencies: {
+          assembly: {
+            ref: "#/inputSpec/assembly/value"
+          }
+        }
+      }
+    },
     inputs: {
       assembly: {
         spec: {
           category: "assembly",
           type: "string",
-          schema: {
-            species: ["Human"],
-            assemblies: [
-              [
-                {
-                  name: "hg19",
-                  value: {
-                    value: "hg19",
-                    aliases: ["GRCh37"]
-                  }
+          schema: [
+            {
+              specie: "Human",
+              assemblies: {
+                hg19: {
+                  aliases: ["GRCh37"]
                 },
-                {
-                  name: "hg38",
-                  value: {
-                    value: "hg38",
-                    aliases: ["GRCh38"]
-                  }
+                hg38: {
+                  aliases: ["GRCh38"]
                 }
-              ]
-            ]
+              }
+            }
+          ],
+          description: {
+            title: "Choose Genome and Assembly"
           }
         },
-        description: {
-          title: "Choose Genome and Assembly"
-        },
+
         value: null
       },
       inputFile: {
@@ -192,7 +235,7 @@ const available = [
           category: "vcf",
           type: "file",
           assembly: {
-            $ref: "#/inputs/assembly"
+            ref: "#/inputs/assembly"
           },
           protocols_accepted: ["file://", "s3://", "gs://"],
           compression_accepted: ["gz", "bgz"]
@@ -233,7 +276,7 @@ const available = [
           schema: { build_version: "1" },
           category: "bystro-annotation",
           type: "file",
-          compression_scheme: "gz"
+          compression_scheme: "#/parameters/compress"
         },
         description: {
           name: "Bystro Annotation"

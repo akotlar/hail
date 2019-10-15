@@ -1,10 +1,10 @@
-import { PureComponent, createRef } from 'react';
+import { PureComponent, createRef } from "react";
 // import { login } from '../libs/auth';
-import '../styles/pages/login.scss';
-import '../styles/card.scss';
-import 'isomorphic-unfetch';
-import { initIdTokenHandler, TokenInterface } from '../libs/auth';
-import Router from 'next/router'
+import "../styles/pages/login.scss";
+import "../styles/card.scss";
+import "isomorphic-unfetch";
+import { initIdTokenHandler, TokenInterface } from "../libs/auth";
+import Router from "next/router";
 
 import getConfig from "next/config";
 
@@ -16,7 +16,6 @@ declare type state = {
   failed?: boolean;
   email?: any;
   password?: any;
-
 };
 
 interface LoginProps {
@@ -38,26 +37,23 @@ class Login extends PureComponent<LoginProps> {
 
     fetch(`${url}/user/auth/local`, {
       method: "POST",
-      credentials: 'same-origin',
+      credentials: "same-origin",
       headers: {
-        'Content-Type': 'application/json'
-      }, body: JSON.stringify(
-        { email, password }
-      )
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
     })
       .then(r => r.json())
       .then(data => {
         console.info("data", data);
         tokenHandler.setTokenFromJSON(data);
-        console.info("token is", tokenHandler.token)
-        Router.push('/')
+        console.info("token is", tokenHandler.token);
+        Router.push("/");
       })
       .catch(e => {
         console.info(e.message);
         console.info("failed to fetch", e.message);
       });
-
-
   };
 
   onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,69 +65,46 @@ class Login extends PureComponent<LoginProps> {
   handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    this.onLoginButtonClick(this.state.email.current.value, this.state.password.current.value);
-  }
-
-  // render() {
-  //   return (
-  //     <span id="login" className="centered">
-  //       {this.state.failed ? (
-  //         <div>Unauthorized!</div>
-  //       ) : (
-  //           <Fragment>
-  //             <h3>Login</h3>
-  //             <span id="login-choices">
-  //               <button
-  //                 className="outlined-button"
-  //                 onClick={this.onLoginButtonClick}
-  //               >
-  //                 Login
-  //             </button>
-  //               <span id="separator">or</span>
-  //               <form onSubmit={this.onSubmit}>
-  //                 <input
-  //                   type="password"
-  //                   onChange={this.onChange}
-  //                   placeholder="Enter the workshop password"
-  //                 />
-  //               </form>
-  //             </span>
-  //           </Fragment>
-  //         )}
-  //     </span>
-  //   );
-  // }
-
-  // md-card class='narrow-form center'
-  //   ng-if='loginCtrl.message'>
-  //   <md-card-title>
-  //     <md-card-title-text>
-  //       <h5 class='error'>Log in to view this page</h5>
-  //       <!--ng-bind='::loginCtrl.message' -->
-  //     </md-card-title-text>
-  //   </md-card-title>
-
-  // </md-card>
+    this.onLoginButtonClick(
+      this.state.email.current.value,
+      this.state.password.current.value
+    );
+  };
 
   render() {
     return (
-      <div id='login-page' className='centered'>
-        <div className='card shadow1'>
-          <div className='header'><h2>Log In</h2></div>
-          <form className='content' onSubmit={this.handleSubmit}>
-            <div className='input-container'>
-              <input type='text' placeholder='email' ref={this.state.email} value='seqantpaper@gmail.com' />
+      <div id="login-page" className="centered">
+        <div className="card shadow1">
+          <div className="header">
+            <h2>Log In</h2>
+          </div>
+          <form className="content" onSubmit={this.handleSubmit}>
+            <div className="input-container">
+              <input
+                type="text"
+                placeholder="email"
+                ref={this.state.email}
+                value="seqantpaper@gmail.com"
+              />
             </div>
-            <div className='input-container'>
-              <input type='password' placeholder='password' ref={this.state.password} value='seqantgenetics' />
+            <div className="input-container">
+              <input
+                type="password"
+                placeholder="password"
+                ref={this.state.password}
+                value="seqantgenetics"
+              />
             </div>
-            <div className='row' style={{ marginTop: '10px', alignItems: 'center', justifyContent: 'center' }}>
-              <button >Log In</button>
-              <a href='#' style={{ marginLeft: '1rem' }}>Sign up</a>
+            <div className="action row center">
+              <button>Log In</button>
+              <a href="#" style={{ marginLeft: "1rem" }}>
+                Sign up
+              </a>
             </div>
           </form>
         </div>
-      </div >)
+      </div>
+    );
   }
 }
 

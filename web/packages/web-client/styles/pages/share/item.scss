@@ -1,30 +1,53 @@
 @import '../../variables.scss';
+@import "styles/card.scss";
+@import "styles/pages/public.scss";
 
 //https://codepen.io/prasannapegu/pen/JdyrZP
 #theme-site {
-    #main {
-
-        // padding-left: 0px;
-        // padding-right: 0px;
 
 
-        #anayses-item-page {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            flex-direction: column;
-            justify-content: center;
-            flex: 1;
+    // padding-left: 0px;
+    // padding-right: 0px;
 
-            ol,
-            li {
-                align-items: center;
-                display: flex;
-                justify-content: space-between;
-                padding: 0px;
-                width: 100%;
+
+    #anayses-item-page {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        justify-content: center;
+        flex: 1;
+        background-color: inherit;
+
+        ol {
+            margin: 0px;
+
+            +ol {
+                margin-top: $margin;
             }
+        }
 
+        li+li {
+            margin-top: $margin;
+        }
+
+        ol,
+        li {
+            align-items: center;
+            display: flex;
+            justify-content: flex-start;
+            padding: 0px;
+            width: 100%;
+        }
+
+
+
+        .complete-icon-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: cente;
+            margin-top: 16px;
+            margin-bottom: -43px;
 
         }
 
@@ -33,9 +56,13 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            margin-right: 10px;
             margin-left: 10px;
-            max-width: 500px;
+            max-width: 600px;
+            margin-right: auto;
+
+            +* {
+                margin-left: 10px;
+            }
         }
 
         #controls-bottom {
@@ -46,30 +73,7 @@
             margin-bottom: -47px;
         }
 
-        .subheader {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
 
-            >:first-child {
-                flex: 1;
-            }
-
-            button {
-                margin-left: $margin;
-                margin-right: -1px;
-            }
-        }
-
-        select {
-            width: 48%;
-            appearance: none;
-            padding: 10px 2px;
-            background: inherit;
-            border: none;
-            border-bottom: 1px solid $black;
-            border-radius: 0px;
-        }
 
         .header {
             overflow: visible;
@@ -96,6 +100,8 @@
             }
         }
 
+
+
         // i.link:before {
         //     content: "map";
         //     position: absolute;
@@ -117,8 +123,6 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            margin-top: 20px;
-            margin-bottom: -60px;
 
         }
 
@@ -130,6 +134,7 @@
             position: relative;
             flex: 1;
             width: 100%;
+            background-color: inherit;
 
 
 
@@ -144,21 +149,15 @@
                 flex: 1;
 
 
+
                 &.before {
                     justify-content: flex-start;
+
+
 
                     >button {
                         position: relative;
                         margin-left: -.4375rem;
-
-                        &:hover:before {
-                            content: "Add input";
-                            position: absolute;
-                            left: 0px;
-                            color: $gray;
-                            margin-left: 20px;
-                            width: 200px;
-                        }
 
                         &:disabled {
                             &:hover:before {
@@ -173,17 +172,7 @@
                     justify-content: flex-end;
 
                     >button {
-                        position: relative;
                         margin-right: -.4375rem;
-
-                        &:hover:before {
-                            content: "Add output edge";
-                            position: absolute;
-                            right: 0;
-                            color: $gray;
-                            margin-right: 25px;
-                            width: 150px;
-                        }
                     }
                 }
 
@@ -214,15 +203,11 @@
 
                     .link {
                         border-color: $light-blue;
+
+
                     }
                 }
             }
-
-
-            .card {
-                min-width: 400px;
-            }
-
 
 
             .link {
@@ -232,6 +217,15 @@
                 border: 1px solid $light-gray;
                 margin: 0 20px;
                 position: relative;
+                background-color: inherit;
+
+                .complete {
+                    position: absolute;
+                    width: auto;
+                    top: -11px;
+                    left: 45%;
+                    background-color: inherit;
+                }
             }
 
             .title {
@@ -544,6 +538,7 @@
             align-items: center;
             justify-content: space-between;
             flex-basis: 16.67%;
+            background-color: inherit;
 
             &.before {
                 padding-right: 0px;
@@ -594,6 +589,7 @@
                 flex-basis: 100%;
                 display: flex;
                 height: 100%;
+                max-width: 33.333%;
 
                 @media (min-width: 600px) {
                     flex-basis: calc(33.333% - 20px);
@@ -624,8 +620,8 @@
 
 
 
-
         }
+
 
     }
 }

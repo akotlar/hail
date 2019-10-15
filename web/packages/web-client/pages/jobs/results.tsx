@@ -95,11 +95,16 @@ class Jobs extends React.PureComponent {
 
       if (idx > min) {
         max = idx;
+        if (min == -1) {
+          min = 0;
+        }
       } else if (idx == min) {
         min = idx;
         max = idx;
       } else if (idx > min) {
         max = idx;
+      } else if (min == -1) {
+        min = 0;
       } else {
         min = idx;
       }
@@ -206,7 +211,7 @@ class Jobs extends React.PureComponent {
             {this.state.filteredJobs.map((job, idx) => (
               <div
                 key={idx}
-                className={`card shadow1 ${
+                className={`card clickable shadow1 ${
                   idx >= this.state.jobsSelected[0] &&
                   idx <= this.state.jobsSelected[1]
                     ? "selected"

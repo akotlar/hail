@@ -1,10 +1,19 @@
 import { PureComponent, Fragment } from "react";
 
 type Props = {
-  species: string[];
-  assemblies: string[];
+  input: {
+    value: assemblyValue;
+  };
   onSelected: (res: any) => void;
   // inputStage: number
+};
+
+type assemblies = { [assembly: string]: { aliases: string[] } }[];
+
+type assemblyValue = {
+  assembly: string;
+  specie: string;
+  aliases: string[];
 };
 
 type state = {
@@ -12,16 +21,16 @@ type state = {
   chosenSpecie?: string;
   chosenAssembly?: string;
   assemblySpec: any;
-  selectedAssembly?: string;
-  species: string[];
-  assemblies: { name: string; value: { value: string; aliases: string[] } }[][];
-  cb: (res: any) => void;
-  // inputStage: number
+  selectedAssembly?: assemblyValue;
+  selectedSpecie: { specie: string; assemblies: assemblies };
+  assemblies: assemblies;
+  species: { specie: string; assemblies: assemblies }[];
+  cb: (res: assemblyValue) => void;
 };
 class GenomeSelector extends PureComponent<Props> {
   state: state = {
     assemblySpec: null,
-    selectedAssembly: null,
+    selectedSpecie: null,
     idx: 0,
     species: [],
     assemblies: [],
@@ -32,30 +41,51 @@ class GenomeSelector extends PureComponent<Props> {
   constructor(props: any) {
     super(props);
 
-    // this.state.assemblySpec = this.props.assemblySpec;
-    this.state.assemblies = props.assemblies;
-    this.state.species = props.species;
+    const assemblyInput = props.input;
+    const schema = assemblyInput.spec.schema;
+
+    this.state.species = schema;
     this.state.cb = props.onSelected;
     this.state.idx = 0;
 
-    // this.state.chosenAssembly = this.state.assemblySpec.value;
+    const assembly = assemblyInput.value;
+    if (assembly !== null && assembly !== undefined) {
+      this.state.selectedAssembly = assembly;
 
-    console.info("PROPS", props.assemblies);
+      console.info("selectedAssembly", this.state.selectedAssembly);
+      console.info("schema", schema);
+      console.info("sepcies", this.state.species);
+      this.state.selectedSpecie = this.state.species.find(
+        entry => entry.specie === this.state.selectedAssembly.specie
+      );
 
-    // this.state.inputStage = props.inputStage;
-    // console.info('props', this.state);
+      console.info(this.state.selectedSpecie);
+      return;
+    }
+
+    this.state.selectedSpecie = schema[0];
+    this.state.selectedAssembly = null;
+    console.info("selected", this.state.selectedSpecie);
   }
 
   handleSelected = (e: any) => {
     const assembly = e.target.value;
-    // stupid
-    const assemblies = this.state.assemblies[this.state.idx];
 
-    for (let i = 0; i < assemblies.length; i++) {
-      if (assemblies[i].value.value === assembly) {
-        this.state.cb(assembly);
-      }
-    }
+    this.state.cb(
+      Object.assign({
+        assembly,
+        specie: this.state.selectedSpecie.specie,
+        aliases: this.state.selectedSpecie.assemblies[assembly].aliases
+      })
+    );
+  };
+
+  handleSpeciesChosen = (e: any) => {
+    const idx = e.target.value;
+
+    this.setState({
+      assemblies: this.state.species[idx].assemblies
+    });
   };
 
   render() {
@@ -71,27 +101,35 @@ class GenomeSelector extends PureComponent<Props> {
             marginLeft: 0
           }}
         >
-          {/* <div className="select-wrapper"> */}
-          <select defaultValue={this.state.species[this.state.idx]}>
-            {this.state.species.map(specie => (
-              <option key={specie} value={specie}>
-                {specie}
+          <select
+            defaultValue={this.state.selectedSpecie.specie}
+            onChange={this.handleSpeciesChosen}
+          >
+            {this.state.species.map((entry, idx) => (
+              <option key={idx} value={idx}>
+                {entry.specie}
               </option>
             ))}
           </select>
-          {/* </div> */}
-          {/* <div className="select-wrapper"> */}
-          <select defaultValue="" onChange={this.handleSelected}>
+          <select
+            defaultValue={
+              (this.state.selectedAssembly &&
+                this.state.selectedAssembly.assembly) ||
+              ""
+            }
+            onChange={this.handleSelected}
+          >
             <option disabled value="">
               Assembly
             </option>
-            {this.state.assemblies[this.state.idx].map((assembly, idx) => (
-              <option key={idx} value={assembly.value.value}>
-                {assembly.name}
-              </option>
-            ))}
+            {Object.keys(this.state.selectedSpecie.assemblies).map(
+              (assembly, idx) => (
+                <option key={idx} value={assembly}>
+                  {assembly}
+                </option>
+              )
+            )}
           </select>
-          {/* </div> */}
         </span>
       </Fragment>
     );
