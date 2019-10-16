@@ -770,11 +770,6 @@ class Item extends React.PureComponent {
                                         this.state.currentNodeSpec.input_stage
                                           .ref.value.ref
                                       }
-                                      /outputs/
-                                      {
-                                        this.state.currentNodeSpec.input_stage
-                                          .ref.value.outputKey
-                                      }
                                     </a>
                                     <button
                                       className="icon-button"
@@ -932,12 +927,12 @@ class Item extends React.PureComponent {
                     }
                     onClick={() => this.submit(this.state.currentNode)}
                   >
-                    <i className="material-icons">directions_run</i>
+                    <i className="material-icons h2">play_circle_outline</i>
                   </button>
                 </div>
                 <button
                   data-before="Add output node"
-                  className="icon-button tooltip-container tooltip-left"
+                  className="icon-button tooltip-container tooltip-left subtitle-2"
                   onClick={() =>
                     Router.push({
                       pathname: "/share",

@@ -50,6 +50,10 @@ html {
     &.highlight {
       color: $light-blue;
     }
+
+    &.h2 {
+      font-size: 2.875rem;
+    }
   }
 
 
@@ -84,10 +88,10 @@ html {
 
     &.icon-button {
       border-radius: 50%;
-      height: 2.5rem;
+      // height: 2.5rem;
       padding: .4375rem;
       border: none;
-      width: 2.5rem;
+      // width: 2.5rem;
 
       &:hover {
         background: $lightest-gray;
@@ -164,6 +168,7 @@ html {
 
   h1,
   h2,
+  .h2,
   h3,
   h4,
   h5,
@@ -232,23 +237,23 @@ html {
       position: absolute;
 
       width: 200px;
-      font-size: .75rem;
+      font-size: inherit;
     }
 
     &.tooltip-right:hover:before {
-      margin-left: $margin / 4;
+      margin-left: $margin / 2;
       left: 100%;
       text-align: left;
     }
 
     &.tooltip-left:hover:before {
-      margin-right: $margin / 4;
+      margin-right: $margin / 2;
       right: 100%;
       text-align: right;
     }
 
     &.tooltip-down:hover:before {
-      margin-top: $margin / 4;
+      margin-top: $margin / 2;
       top: 100%;
       text-align: center;
     }

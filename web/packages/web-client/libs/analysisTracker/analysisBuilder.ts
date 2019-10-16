@@ -218,10 +218,7 @@ export const getNextNodes = (currentNode: analysisItem): linkedNode => {
   return currentNode.next;
 };
 
-export type inputRefValue = {
-  ref: string;
-  outputKey: string;
-};
+export type inputRefValue = string;
 
 export const checkInputsCompleted = (item: analysisItem): boolean => {
   console.info("CHECKING", item);
@@ -344,7 +341,7 @@ function checkAssembliesCompatibleSetIfMissing(
     iAssembly = inputAssembly.value;
   }
 
-  if (iAssembly[0] === null) {
+  if (iAssembly[0] === null || iAssembly[0].value === null) {
     for (let i = 0; i < iAssembly[0].spec.schema.length; i++) {
       const entry = iAssembly[0].spec.schema[i];
       const specie = entry.specie;
@@ -389,7 +386,7 @@ function checkAssembliesCompatibleSetIfMissing(
     console.info("Not found", outputAssembly);
     return false;
   }
-
+  console.info("iAssembly[0]", iAssembly[0]);
   if (iAssembly[0].value.assembly === outputAssembly.value) {
     return true;
   }
@@ -444,10 +441,16 @@ export const removeLinkByInput = (
   const itemInput = item.inputs[inputKey];
   const refValue: inputRefValue = itemInput.value;
 
-  const previousID = refValue.ref;
-  const refKey = refValue.outputKey;
+  const [, referredToItem, path] = extractRefPath(allNodes, item, refValue);
+  const previousID = referredToItem.id;
+  // const refKey = refValue.outputKey;
 
-  console.info("ref", refValue, previousID, refKey);
+  if (path[1] !== "outputs") {
+    throw new Error("expected ref to contain `outputs` key after node id");
+  }
+  const refKey = path[2];
+
+  console.info("ref", refValue, previousID);
 
   if (!item.previous) {
     throw new Error("Item must have previous links");
@@ -648,6 +651,8 @@ export const linkNodes = (
         rightItem.inputs[inputKey].value = {
           ref: `${leftItem.jobID}/outputs/${outputKey}`
         };
+
+        console.info("outputkey is", rightItem.inputs[inputKey].value);
 
         if (!linked) {
           if (!rightItem.previous) {

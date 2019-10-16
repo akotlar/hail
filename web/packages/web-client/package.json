@@ -88,6 +88,7 @@
     "@types/jwt-decode": "^2.2.1",
     "@types/next": "^8.0.6",
     "@types/next-server": "^8.1.2",
+    "@types/node-fetch": "^2.5.2",
     "@types/react-dom": "^16.9.0",
     "@types/url-parse": "^1.4.3",
     "@typescript-eslint/eslint-plugin": "^2.2.0",

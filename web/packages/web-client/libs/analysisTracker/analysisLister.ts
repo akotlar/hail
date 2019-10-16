@@ -149,7 +149,11 @@ const available = [
       input_order: ["assembly", "inputFile"],
       event_stages: [],
       distribution_type: "map",
-      type: "annotation"
+      type: "annotation",
+      dirs: {
+        out: null
+      },
+      assembly: "faeke"
     },
     submission: {
       state: "not_submitted",
@@ -268,6 +272,12 @@ const available = [
       filter: {
         description: "Acceptable filter parameters",
         default: "PASS,."
+      },
+      outputDir: {
+        description:
+          "Change output directory/bucket. If left blank automatically set",
+        value: null,
+        type: "string"
       }
     },
     outputs: {
