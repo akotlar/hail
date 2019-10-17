@@ -179,10 +179,19 @@ const available = [
             specie: "Human",
             assemblies: {
               hg19: {
-                aliases: ["GRCh37"]
+                value: "hg19",
+                name: "UCSC hg19",
+                description: "UCSC hg19"
               },
               hg38: {
-                aliases: ["GRCh38"]
+                value: "hg38",
+                name: "GRCh38/hg38",
+                description: "UCSC hg38"
+              },
+              GRCh37: {
+                value: "hg19",
+                name: "GRCh37 (cast to hg19)",
+                description: "Accepts GRCh37, maps to UCSC hg19"
               }
             }
           }
@@ -218,10 +227,19 @@ const available = [
               specie: "Human",
               assemblies: {
                 hg19: {
-                  aliases: ["GRCh37"]
+                  value: "hg19",
+                  name: "UCSC hg19",
+                  description: "UCSC hg19"
                 },
                 hg38: {
-                  aliases: ["GRCh38"]
+                  value: "hg38",
+                  name: "GRCh38/hg38",
+                  description: "UCSC hg38"
+                },
+                GRCh37: {
+                  value: "hg19",
+                  name: "GRCh37 (cast to hg19)",
+                  description: "Accepts GRCh37, maps to UCSC hg19"
                 }
               }
             }

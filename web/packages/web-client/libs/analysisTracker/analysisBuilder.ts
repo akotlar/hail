@@ -344,40 +344,16 @@ function checkAssembliesCompatibleSetIfMissing(
   if (iAssembly[0] === null || iAssembly[0].value === null) {
     for (let i = 0; i < iAssembly[0].spec.schema.length; i++) {
       const entry = iAssembly[0].spec.schema[i];
+      console.info("Entry", entry);
       const specie = entry.specie;
       const assemblies = entry.assemblies;
 
       console.info("specie", specie, assemblies);
 
       if (assemblies[requiredAssembly]) {
-        iAssembly[0].value = {
-          assembly: requiredAssembly,
-          specie,
-          aliases: assemblies[requiredAssembly].aliases
-        };
-        return true;
-      }
+        iAssembly[0].value = assemblies[requiredAssembly].value;
 
-      const assembly = Object.keys(assemblies).find(assembly => {
-        console.info(
-          "checking",
-          assembly,
-          assemblies[assembly].aliases,
-          requiredAssembly,
-          assemblies[assembly].aliases.includes(requiredAssembly),
-          assemblies[assembly].aliases[0] == requiredAssembly
-        );
-        return !!assemblies[assembly].aliases.includes(requiredAssembly);
-      });
-
-      if (assembly) {
-        iAssembly[0] = {
-          assembly,
-          specie,
-          aliases: assemblies[assembly].aliases
-        };
-
-        console.info("Found alias,", assembly, iAssembly[0]);
+        console.info("NOW!", iAssembly);
         return true;
       }
 
@@ -387,11 +363,7 @@ function checkAssembliesCompatibleSetIfMissing(
     return false;
   }
   console.info("iAssembly[0]", iAssembly[0]);
-  if (iAssembly[0].value.assembly === outputAssembly.value) {
-    return true;
-  }
-
-  if (iAssembly[0].value.aliases.includes(outputAssembly.value)) {
+  if (iAssembly[0].value === outputAssembly.value) {
     return true;
   }
 

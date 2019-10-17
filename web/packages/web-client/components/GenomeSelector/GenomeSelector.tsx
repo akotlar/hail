@@ -71,13 +71,7 @@ class GenomeSelector extends PureComponent<Props> {
   handleSelected = (e: any) => {
     const assembly = e.target.value;
 
-    this.state.cb(
-      Object.assign({
-        assembly,
-        specie: this.state.selectedSpecie.specie,
-        aliases: this.state.selectedSpecie.assemblies[assembly].aliases
-      })
-    );
+    this.state.cb(assembly);
   };
 
   handleSpeciesChosen = (e: any) => {
