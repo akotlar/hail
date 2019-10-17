@@ -224,7 +224,7 @@ html {
   }
 
   .subtitle-2 {
-    font-size: .75rem;
+    font-size: $subtitle2-size;
     font-size: $weight-medium;
   }
 
@@ -232,30 +232,31 @@ html {
     position: relative;
 
     &:hover:before {
-      content: attr(data-before);
+      content: attr(data-tooltip);
       color: inherit;
       position: absolute;
+      z-index: 999;
 
       width: 200px;
       font-size: inherit;
     }
 
     &.tooltip-right:hover:before {
-      margin-left: $margin / 2;
       left: 100%;
       text-align: left;
+      margin-left: $margin/4;
     }
 
     &.tooltip-left:hover:before {
-      margin-right: $margin / 2;
       right: 100%;
       text-align: right;
+      margin-right: $margin/4;
     }
 
     &.tooltip-down:hover:before {
-      margin-top: $margin / 2;
       top: 100%;
       text-align: center;
+      margin-top: $margin/4;
     }
 
     &:disabled:hover:before {

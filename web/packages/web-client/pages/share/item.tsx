@@ -6,114 +6,6 @@ import data, {
 } from "../../libs/analysisTracker/analysisLister";
 import "styles/pages/share/item.scss";
 import GenomeSelector from "../../components/GenomeSelector/GenomeSelector";
-
-// declare module "react" {
-//   interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
-//     // extends React's HTMLAttributes
-//     custom?: string;
-//   }
-// }
-
-// import clsx from "clsx";
-// import { createStyles, makeStyles, Theme } from "@material-ui/core/styles";
-// import CircularProgress from "@material-ui/core/CircularProgress";
-// import { green } from "@material-ui/core/colors";
-// import Button from "@material-ui/core/Button";
-// // import Fab from "@material-ui/core/Fab";
-// // import CheckIcon from "@material-ui/icons/Check";
-// // import SaveIcon from "@material-ui/icons/Save";
-
-// const useStyles = makeStyles((theme: Theme) =>
-//   createStyles({
-//     root: {
-//       display: "flex",
-//       alignItems: "center"
-//     },
-//     wrapper: {
-//       margin: theme.spacing(1),
-//       position: "relative"
-//     },
-//     buttonSuccess: {
-//       backgroundColor: green[500],
-//       "&:hover": {
-//         backgroundColor: green[700]
-//       }
-//     },
-//     fabProgress: {
-//       color: green[500],
-//       position: "absolute",
-//       top: 0,
-//       left: -1,
-//       zIndex: 1
-//     },
-//     buttonProgress: {
-//       color: green[500],
-//       position: "absolute",
-//       top: "50%",
-//       left: "50%",
-//       marginTop: -12,
-//       marginLeft: -12
-//     }
-//   })
-// );
-
-// function CircularIntegration(props) {
-//   const classes = useStyles(props);
-//   const [loading, setLoading] = React.useState(false);
-//   const [success, setSuccess] = React.useState(false);
-//   const timer = React.useRef<NodeJS.Timeout>();
-//   const currentNode: analysisItem = props;
-
-//   console.info("currentNode", currentNode);
-//   const buttonClassname = clsx({
-//     [classes.buttonSuccess]: success
-//   });
-
-//   React.useEffect(() => {
-//     return () => {
-//       clearTimeout(timer.current);
-//     };
-//   }, []);
-
-//   const handleButtonClick = () => {
-//     if (!loading) {
-//       setSuccess(false);
-//       setLoading(true);
-//       timer.current = setTimeout(() => {
-//         setSuccess(true);
-//         setLoading(false);
-//       }, 2000);
-//     }
-//   };
-
-//   return (
-//     <div className={classes.root}>
-//       <div className={classes.wrapper}>
-//         <button className="icon-button">
-//           <i onClick={handleButtonClick} className="material-icons">
-//             directions_run
-//           </i>
-//         </button>
-
-//         <CircularProgress size={40} className={classes.fabProgress} />
-//       </div>
-//       <div className={classes.wrapper}>
-//         <Button
-//           variant="contained"
-//           color="primary"
-//           className={buttonClassname}
-//           disabled={loading}
-//           onClick={handleButtonClick}
-//         >
-//           Accept terms
-//         </Button>
-
-//         <CircularProgress size={24} className={classes.buttonProgress} />
-//       </div>
-//     </div>
-//   );
-// }
-
 import {
   getNode,
   cloneAndAddNode,
@@ -135,7 +27,10 @@ import {
   runningOrSubmitted,
   removeNextNode,
   removePreviousNode,
-  getNodeFromRef
+  getNodeFromRef,
+  hasAllValues,
+  addCallback as addAnalysisBuilderCallback
+  // removeCallback
   // batchEvents,
   // unCycleAll
 } from "../../libs/analysisTracker/analysisBuilder";
@@ -376,7 +271,11 @@ class Item extends React.PureComponent {
       }
     }
 
-    this.updateStateForNewComponent(currentNode);
+    if (newNode.inputs) {
+      this.updateStateForNewComponent(newNode);
+    } else {
+      this.updateStateForNewComponent(currentNode);
+    }
   };
 
   componentDidMount() {
@@ -390,6 +289,13 @@ class Item extends React.PureComponent {
         (this.props as any).router.query.link_type
       )
     );
+
+    addAnalysisBuilderCallback("update", () => {
+      console.info("got update");
+      this.setState((old: state) => ({
+        stepCheckpoint: forceRefresh(old.stepCheckpoint)
+      }));
+    });
   }
 
   componentWillUnmount() {
@@ -511,7 +417,7 @@ class Item extends React.PureComponent {
           >
             {this.state.prevNodesDepth1 ? (
               <div
-                className={`side-item-wrap before${
+                className={`side-item-wrap before ${
                   this.state.hasMoreBefore ? "more" : ""
                 } ${this.state.highlightPrevious ? "highlight" : ""}`}
                 style={{ position: "relative" }}
@@ -540,6 +446,7 @@ class Item extends React.PureComponent {
                           >
                             <h4>{getNode(id).description.title}</h4>
                             <button
+                              style={{ marginLeft: ".875rem" }}
                               className="icon-button"
                               onClick={e => this.removePreviousNode(e, id)}
                             >
@@ -559,16 +466,25 @@ class Item extends React.PureComponent {
                   </div>
                 </div>
                 <i className="link">
-                  {!this.state.prevNodesDepth1.inputs ||
-                  this.state.prevNodesDepth1.inputs ? (
-                    <i
-                      className="complete material-icons"
-                      style={{ color: "green" }}
+                  {hasAllValues(this.state.prevNodesDepth1) ? (
+                    <span
+                      data-tooltip="All linked data present"
+                      className="tooltip-container tooltip-down subtitle-2 row"
                     >
-                      check_circle_outline
-                    </i>
+                      <i
+                        className="complete material-icons"
+                        style={{ color: "green" }}
+                      >
+                        check_circle_outline
+                      </i>
+                    </span>
                   ) : (
-                    ""
+                    <span
+                      data-tooltip="Input nodes not complete"
+                      className="tooltip-container tooltip-down subtitle-2 row"
+                    >
+                      <i className="complete material-icons">hourglass_empty</i>
+                    </span>
                   )}
                 </i>
               </div>
@@ -576,8 +492,8 @@ class Item extends React.PureComponent {
               <div className={`side-item-wrap before`}>
                 <button
                   disabled={!this.state.currentNodeInputs}
-                  data-before="Add input"
-                  className="icon-button tooltip-container tooltip-right"
+                  data-tooltip="Add input node"
+                  className="icon-button tooltip-container tooltip-right subtitle-2"
                   onClick={() =>
                     Router.push({
                       pathname: "/share",
@@ -603,14 +519,15 @@ class Item extends React.PureComponent {
                       <h2>{this.state.currentNodeDescription.title}</h2>
                       <button
                         style={{ cursor: "pointer" }}
-                        className="icon-button"
+                        className="icon-button tooltip-container tooltip-down subtitle-2"
+                        data-tooltip="Parameters"
                         onClick={() =>
                           this.setState((old: state) => ({
                             expanded: !old.expanded
                           }))
                         }
                       >
-                        <i className="fas fa-sliders-h"></i>
+                        <i className="material-icons">menu</i>
                       </button>
                     </div>
 
@@ -620,7 +537,8 @@ class Item extends React.PureComponent {
                           html={this.state.currentNodeDescription.subtitle}
                         />
                         <button
-                          className="icon-button"
+                          className="icon-button tooltip-container tooltip-down subtitle-2"
+                          data-tooltip="Info"
                           onClick={() =>
                             this.setState((old: state) => ({
                               expanded: !old.expanded
@@ -685,18 +603,42 @@ class Item extends React.PureComponent {
                               (key, idx) => (
                                 <li
                                   key={idx}
-                                  style={{ justifyContent: "flex-start" }}
+                                  style={{
+                                    justifyContent: "flex-start",
+                                    alignItems: "flex-start"
+                                  }}
                                 >
                                   {idx + 1}.
-                                  <a
-                                    className="link-component"
-                                    href={
-                                      this.state.currentNodeOutputs[key].value
-                                    }
-                                    target="_blank"
-                                  >
-                                    {key}
-                                  </a>
+                                  <span className="column flex">
+                                    <a
+                                      className="link-component"
+                                      href={
+                                        this.state.currentNodeOutputs[key].value
+                                      }
+                                      target="_blank"
+                                    >
+                                      {key}
+                                    </a>
+                                    {this.state.currentNodeOutputs[key].spec &&
+                                    this.state.currentNodeOutputs[key].spec
+                                      .assembly ? (
+                                      <span
+                                        className="subtitle-2"
+                                        style={{
+                                          marginTop: ".4375rem",
+                                          fontStyle: "italic"
+                                        }}
+                                      >
+                                        Assembly:{" "}
+                                        {
+                                          this.state.currentNodeOutputs[key]
+                                            .spec.assembly.value
+                                        }
+                                      </span>
+                                    ) : (
+                                      ""
+                                    )}
+                                  </span>
                                 </li>
                               )
                             )}
@@ -801,15 +743,15 @@ class Item extends React.PureComponent {
                               }}
                             >
                               <button
-                                className="icon-button tooltip-container tooltip-down"
-                                data-before="Upload"
+                                className="icon-button tooltip-container tooltip-down subtitle-2"
+                                data-tooltip="Upload"
                               >
                                 <i className="material-icons">cloud_upload</i>
                               </button>
                               <span>or</span>
                               <button
-                                className="icon-button tooltip-container tooltip-down"
-                                data-before="Link components"
+                                className="icon-button tooltip-container tooltip-down subtitle-2"
+                                data-tooltip="Link components"
                               >
                                 <i
                                   className="material-icons"
@@ -861,6 +803,7 @@ class Item extends React.PureComponent {
                             <h4>{getNode(id).description.title}</h4>
                             <button
                               className="icon-button"
+                              style={{ marginLeft: ".875rem" }}
                               onClick={e => this.removeNextNode(e, id)}
                             >
                               <i className="material-icons" aria-label="cancel">
@@ -916,22 +859,28 @@ class Item extends React.PureComponent {
                     >
                       <i className="material-icons">keyboard_arrow_left</i>
                     </button> */}
-
-                  <button
-                    data-before="Run it!"
-                    className="icon-button tooltip-container tooltip-left"
-                    disabled={
-                      !this.state.currentNodeInputs ||
-                      !this.state.currentNodeInputCompleted ||
-                      runningOrSubmitted(this.state.currentNode)
-                    }
-                    onClick={() => this.submit(this.state.currentNode)}
-                  >
-                    <i className="material-icons h2">play_circle_outline</i>
-                  </button>
+                  {!this.state.currentNodeInputs ||
+                  !this.state.currentNodeInputCompleted ||
+                  runningOrSubmitted(this.state.currentNode) ? (
+                    <button
+                      data-tooltip={"Complete a node to run"}
+                      className="icon-button tooltip-container tooltip-left"
+                      disabled
+                    >
+                      <i className="material-icons h2">play_circle_outline</i>
+                    </button>
+                  ) : (
+                    <button
+                      data-tooltip="Run it!"
+                      className="icon-button tooltip-container tooltip-left"
+                      onClick={() => this.submit(this.state.currentNode)}
+                    >
+                      <i className="material-icons h2">play_circle_outline</i>
+                    </button>
+                  )}
                 </div>
                 <button
-                  data-before="Add output node"
+                  data-tooltip="Add output node"
                   className="icon-button tooltip-container tooltip-left subtitle-2"
                   onClick={() =>
                     Router.push({

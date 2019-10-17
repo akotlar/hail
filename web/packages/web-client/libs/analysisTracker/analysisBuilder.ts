@@ -5,6 +5,26 @@ import {
 } from "../../libs/socketio";
 import { initIdTokenHandler } from "../../libs/auth";
 import fetch from "isomorphic-unfetch";
+import Callbacks from "../callbacks";
+
+const callback_items = { update: [] };
+const callbacks = new Callbacks(callback_items);
+
+export function addCallback(
+  type: string,
+  action: (data: any) => void,
+  triggerOnAddition: boolean = true
+): number {
+  const id = callbacks.add(type, action);
+
+  if (triggerOnAddition) {
+    action(allNodes);
+  }
+
+  return id;
+}
+
+export const removeCallback = callbacks.remove;
 
 type events = {
   submitted: string;
@@ -15,11 +35,11 @@ type events = {
 };
 
 export const batchEvents: events = {
-  submitted: "batchSubmitted",
-  started: "batchStarted",
-  failed: "batchFailed",
-  completed: "batchCompleted",
-  progress: "batchProgress"
+  submitted: "submitted",
+  started: "started",
+  failed: "failed",
+  completed: "completed",
+  progress: "progress"
 };
 
 export const batchStates = {
@@ -42,26 +62,48 @@ function _setSocketIOlisteners(socket: any) {
   socket.on(batchEvents.submitted, data => {
     console.info("received batch submitted event in item.tsx", data);
     // _forward(events.annotation.submitted, data, _updateJob);
+    const job = JSON.parse(data);
+    Object.assign(allNodes[job.jobID], job);
+
+    console.info("allNodes after", allNodes);
+    callbacks.call("update", allNodes);
   });
 
   socket.on(batchEvents.started, data => {
     console.info("received batch started event in item.tsx", data);
     // _forward(events.annotation.submitted, data, _updateJob);
+    const job = JSON.parse(data).data;
+    Object.assign(allNodes[job.jobID], job);
+    console.info("allNodes after", allNodes);
+    callbacks.call("update", allNodes);
   });
 
   socket.on(batchEvents.failed, data => {
     console.info("received batch failed event in item.tsx", data);
     // _forward(events.annotation.submitted, data, _updateJob);
+    const job = JSON.parse(data).data;
+    Object.assign(allNodes[job.jobID], job);
+    console.info("allNodes after", allNodes);
+    callbacks.call("update", allNodes);
   });
 
   socket.on(batchEvents.completed, data => {
     console.info("received batch completed event in item.tsx", data);
     // _forward(events.annotation.submitted, data, _updateJob);
+    const job = JSON.parse(data).data;
+    console.info("job", job);
+    Object.assign(allNodes[job.jobID], job);
+    console.info("allNodes after", allNodes);
+    callbacks.call("update", allNodes);
   });
 
   socket.on(batchEvents.progress, data => {
     console.info("received batch deleted event in item.tsx", data);
     // _forward(events.annotation.submitted, data, _updateJob);
+    const job = JSON.parse(data).data;
+    Object.assign(allNodes[job.jobID], job);
+    console.info("allNodes after", allNodes);
+    callbacks.call("update", allNodes);
   });
 }
 
@@ -109,39 +151,42 @@ let allNodes: analyses = {};
 export let totalNodeSteps: number = 0;
 
 export const isSubmitted = (node: any) => {
-  return node.submission.state !== "not_submitted";
+  return node.submission && node.submission.state !== "not_submitted";
 };
 
 export const isFailed = (node: any) => {
-  return node.submission.state === "failed";
+  return node.submission && node.submission.state === "failed";
 };
 
 export const isCompleted = (node: any) => {
-  return node.submission.state === "completed";
+  return node.submission && node.submission.state === "completed";
 };
 
 export const isStarted = (node: any) => {
-  return node.submission.state === "started";
+  return node.submission && node.submission.state === "started";
 };
 
 export const runningOrCompleted = (node: any) => {
   return (
-    node.submission.state === "started" || node.submission.state === "completed"
+    node.submission &&
+    (node.submission.state === "started" ||
+      node.submission.state === "completed")
   );
 };
 
 export const completed = (node: any) => {
-  return node.submission.state === "completed";
+  return node.submission && node.submission.state === "completed";
 };
 
 export const failed = (node: any) => {
-  return node.submission.state === "failed";
+  return node.submission && node.submission.state === "failed";
 };
 
 export const runningOrSubmitted = (node: any) => {
   return (
-    node.submission.state !== batchStates.notSubmitted &&
-    node.submission.state !== batchStates.failed
+    node.submission &&
+    (node.submission.state !== batchStates.notSubmitted &&
+      node.submission.state !== batchStates.failed)
   );
 };
 
@@ -248,6 +293,20 @@ export const checkInputsCompleted = (item: analysisItem): boolean => {
   return res;
 };
 
+// TODO: store the refs in a single place, to look those up all at once
+export const hasAllValues = (items: linkedNode) => {
+  const areThey = Object.values(items).every(linkedNode => {
+    const node = allNodes[linkedNode.jobID];
+    console.info("Testing node", node);
+    const isIt: boolean = isWaitingOnRef(allNodes, node, "outputs");
+
+    console.info("is it?", isIt);
+    return !isIt;
+  });
+
+  return areThey;
+};
+
 // TODO: Change to all nodes?
 export const submit = (
   currentNode: analysisItem,
@@ -323,6 +382,63 @@ export const submit = (
   );
 };
 
+// TODO: merge this with extract ref
+// track/update
+// TODO: make key enum
+function isWaitingOnRef(allNodes: analyses, node: analysisItem, key: string) {
+  let waitingOnRef = false;
+  let missingValue = false;
+  // We only provide refs on inputs
+  if (!node[key]) {
+    return waitingOnRef;
+  }
+
+  Object.values(node[key]).forEach((val: any) => {
+    if (waitingOnRef || missingValue) {
+      return;
+    }
+
+    if (val.value === null) {
+      missingValue = true;
+      return;
+    }
+
+    Object.keys(val.spec).forEach(specKey => {
+      if (waitingOnRef || missingValue) {
+        return;
+      }
+
+      let specPart = val.spec[specKey];
+      if (specPart && typeof specPart === "object" && specPart.ref) {
+        specPart = extractRefPath(allNodes, node, specPart.ref);
+
+        if (specPart !== null) {
+          // the value isn't null
+
+          return;
+        }
+
+        waitingOnRef = true;
+      }
+    });
+
+    if (typeof val.value === "object" && val.value.ref) {
+      const ref: any = extractRefPath(allNodes, node, val.value.ref);
+
+      if (ref.value !== null) {
+        // input.value = ref.value;
+        return;
+      }
+
+      waitingOnRef = true;
+    }
+  });
+
+  console.info("IN THE END", missingValue);
+
+  return waitingOnRef || missingValue;
+}
+
 function checkAssembliesCompatibleSetIfMissing(
   item: any,
   inputAssembly: any,
@@ -377,6 +493,7 @@ export const getNodeFromRef = (node: analysisItem, ref: string) => {
   return wholeJob;
 };
 
+// TODO: share between client and server
 function extractRefPath(allNodes, node, ref: string) {
   console.info("ref", ref);
   const splitRef = ref.split("/");
@@ -387,13 +504,14 @@ function extractRefPath(allNodes, node, ref: string) {
   let wholeJob: analysisItem;
   splitRef.forEach(v => {
     if (i == 0) {
-      if (splitRef[0] === "#") {
+      if (v === "#") {
         job = node;
       } else {
-        job = allNodes[splitRef[0]];
+        job = allNodes[v];
       }
 
       wholeJob = job;
+      path.push(v);
       i += 1;
       return;
     }
@@ -401,6 +519,8 @@ function extractRefPath(allNodes, node, ref: string) {
     job = job[v];
     path.push(v);
   });
+
+  console.info("wholejob", wholeJob);
 
   return [job, wholeJob, path];
 }
@@ -411,12 +531,13 @@ export const removeLinkByInput = (
 ): analysisItem => {
   console.info("Removing", inputKey);
   const itemInput = item.inputs[inputKey];
-  const refValue: inputRefValue = itemInput.value;
+  const refValue: { ref: string } = itemInput.value;
 
-  const [, referredToItem, path] = extractRefPath(allNodes, item, refValue);
-  const previousID = referredToItem.id;
+  const [, referredToItem, path] = extractRefPath(allNodes, item, refValue.ref);
+  const previousID = referredToItem.jobID;
+
   // const refKey = refValue.outputKey;
-
+  console.info("INFO", path);
   if (path[1] !== "outputs") {
     throw new Error("expected ref to contain `outputs` key after node id");
   }

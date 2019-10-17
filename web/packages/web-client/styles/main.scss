@@ -93,6 +93,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     .centered {
       margin: auto;
     }
+
+    .flex {
+      display: flex;
+
+      &.column {
+        flex-direction: column;
+      }
+    }
   }
 
   #footer {

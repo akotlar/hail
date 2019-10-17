@@ -211,7 +211,7 @@
 
 
             .link {
-                cursor: pointer;
+                cursor: default;
                 font-size: 1.725rem;
                 flex-basis: 313PX;
                 border: 1px solid $light-gray;
@@ -224,7 +224,14 @@
                     width: auto;
                     top: -11px;
                     left: 45%;
-                    background-color: inherit;
+                    background-color: $white;
+                }
+
+                .tooltip-container {
+                    &.tooltip-down:before {
+                        width: 100%;
+                        margin-top: $margin;
+                    }
                 }
             }
 
@@ -624,15 +631,28 @@
 
 
     }
-}
 
-@media screen and (max-width: 900px) {
-    #theme-site {
-        #main {
-            #anayses-item-page {
-                #analysis-chain {
-                    .card {
-                        min-width: 200px;
+    &.dark {
+        #anayses-item-page {
+            #analysis-chain {
+                .link {
+
+                    .complete {
+                        background-color: $black;
+                    }
+                }
+            }
+        }
+    }
+
+    @media screen and (max-width: 900px) {
+        #theme-site {
+            #main {
+                #anayses-item-page {
+                    #analysis-chain {
+                        .card {
+                            min-width: 200px;
+                        }
                     }
                 }
             }
