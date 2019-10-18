@@ -63,7 +63,30 @@ function JobProgress(props: { node: analysisItem }) {
     case "started":
       return <h3>Started</h3>;
     case "completed":
-      return <h3>Completed</h3>;
+      return (
+        <div className="column">
+          <h3>Completed</h3>
+          <span className="content">
+            <h4
+              style={{
+                padding: ".875rem 0",
+                marginBottom: ".875rem",
+                borderBottom: "1px solid #333",
+                width: "100%"
+              }}
+            >
+              Results
+            </h4>
+            <a
+              style={{ marginLeft: "3px" }}
+              href="https://bystro.io/public?_id=5d98bb588e9c547050367183"
+              target="_blank"
+            >
+              View results
+            </a>
+          </span>
+        </div>
+      );
     case "failed":
       return <h3>Failed</h3>;
     default:
@@ -457,6 +480,7 @@ class Item extends React.PureComponent {
                           </span>
                           <div className="subheader">
                             <SanitizeHtml
+                              className="subtitle-2"
                               html={getNode(id).description.subtitle}
                             />
                           </div>
@@ -783,7 +807,28 @@ class Item extends React.PureComponent {
                   this.state.hasMoreAfter ? "more" : ""
                 }`}
               >
-                <i className="link" />
+                <i className="link">
+                  {hasAllValues(this.state.nextNodesDepth1) ? (
+                    <span
+                      data-tooltip="Outputs complete!"
+                      className="tooltip-container tooltip-down subtitle-2 row"
+                    >
+                      <i
+                        className="complete material-icons"
+                        style={{ color: "green" }}
+                      >
+                        check_circle_outline
+                      </i>
+                    </span>
+                  ) : (
+                    <span
+                      data-tooltip="Output nodes not complete"
+                      className="tooltip-container tooltip-down subtitle-2 row"
+                    >
+                      <i className="complete material-icons">hourglass_empty</i>
+                    </span>
+                  )}
+                </i>
                 <React.Fragment>
                   <div className="analysis-item">
                     {Object.keys(this.state.nextNodesDepth1).map(id => (

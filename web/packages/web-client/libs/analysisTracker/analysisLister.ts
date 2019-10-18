@@ -322,7 +322,7 @@ const available = [
     batchID: null,
     description: {
       title: "Gnomad Exomes",
-      subtitle: "Grabs gnomad.exomes",
+      subtitle: "Grabs gnomad.exomes from Broad's google bucket",
       author: "Alex Kotlar",
       authorUrl: "https://github.com/akotlar/bystro",
       githubLink: "https://github.com/akotlar/bystro",
@@ -393,7 +393,7 @@ const available = [
         },
         description: {
           title: "Gnomad Exomes VCF",
-          subtitle: `<span>Accepts <a href='http://vcf.com' target='_blank'>VCF</a></span>`
+          subtitle: `<span>Accepts <a href='https://samtools.github.io/hts-specs/VCFv4.2.pdf' target='_blank'>VCF</a></span>`
         },
 
         // value, or a symlink which other tasks this comes from
@@ -408,7 +408,7 @@ const available = [
     batchID: null,
     description: {
       title: "Gnomad Genomes",
-      subtitle: "Grabs gnomad.genomes",
+      subtitle: "Grabs gnomad.genomes from Broad's google bucket",
       author: "Alex Kotlar",
       authorUrl: "https://github.com/akotlar/bystro",
       githubLink: "https://github.com/akotlar/bystro",
@@ -463,20 +463,28 @@ const available = [
       finishedDate: null
     },
     outputs: {
-      "gnomad.exomes.r2.1.1.sites.1.vcf.bgz": {
-        name: "Gnomad Exomes Chr1",
+      "gnomad.genomes.r2.1.1.sites.1.vcf.bgz": {
+        name: "Gnomad Genomes Chr1",
         spec: {
-          schema: { version: "2.11" },
-          title: null,
-          description: `<span>Accepts <a href='http://vcf.com' target='_blank'>VCF</a></span>`,
+          schema: {
+            version: "2.11",
+            required: true,
+            INFO: { AC_EAS: "Int", AC_AFR: "Int" }
+          },
           category: "vcf",
           type: "file",
-          assembly: "GRCh37"
+          assembly: {
+            value: "GRCh37"
+          }
+        },
+        description: {
+          title: "Gnomad Genomes VCF",
+          subtitle: `<span>Accepts <a href='https://samtools.github.io/hts-specs/VCFv4.2.pdf' target='_blank'>VCF</a></span>`
         },
 
         // value, or a symlink which other tasks this comes from
         value:
-          "https://storage.googleapis.com/gnomad-public/release/2.1.1/vcf/exomes/gnomad.exomes.r2.1.1.sites.1.vcf.bgz"
+          "https://storage.googleapis.com/gnomad-public/release/2.1.1/vcf/genomes/gnomad.genomes.r2.1.1.sites.1.vcf.bgz"
       }
     }
   },

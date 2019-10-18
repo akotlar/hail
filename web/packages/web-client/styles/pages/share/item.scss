@@ -182,8 +182,10 @@
                 .subheader>* {
                     white-space: nowrap;
                     text-overflow: ellipsis;
-                    max-width: 200px;
+                    max-width: 250px;
+                    overflow: hidden;
                 }
+
 
 
 
