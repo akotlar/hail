@@ -202,7 +202,7 @@ final case class PCanonicalArray(elementType: PType, required: Boolean = false) 
     region.allocate(contentsAlignment, contentsByteSize(length))
 
   private def writeMissingness(region: Region, aoff: Long, length: Int, value: Byte) {
-    Region.setMemory(aoff + lengthHeaderBytes, nMissingBytes(length), value)
+    Region.setMemoryFastZeroOne(aoff + lengthHeaderBytes, nMissingBytes(length), value)
   }
 
   def setAllMissingBits(region: Region, aoff: Long, length: Int) {
@@ -231,14 +231,14 @@ final case class PCanonicalArray(elementType: PType, required: Boolean = false) 
     else
       Code(
         Region.storeInt(aoff, length),
-        Region.setMemory(aoff + const(lengthHeaderBytes), nMissingBytes(length).toL, const(if (setMissing) (-1).toByte else 0.toByte)))
+        Region.setMemoryFastZeroOne(aoff + const(lengthHeaderBytes), nMissingBytes(length).toL, const(if (setMissing) (-1).toByte else 0.toByte)))
   }
 
   def zeroes(region: Region, length: Int): Long = {
     require(elementType.isNumeric)
     val aoff = allocate(region, length)
     initialize(region, aoff, length)
-    Region.setMemory(aoff + elementsOffset(length), length * elementByteSize, 0.toByte)
+    Region.setMemoryFastZeroOne(aoff + elementsOffset(length), length * elementByteSize, 0.toByte)
     aoff
   }
 
@@ -248,7 +248,7 @@ final case class PCanonicalArray(elementType: PType, required: Boolean = false) 
     Code(
       aoff := allocate(region, length),
       stagedInitialize(aoff, length),
-      Region.setMemory(aoff + elementsOffset(length), length.toL * elementByteSize, 0.toByte),
+      Region.setMemoryFastZeroOne(aoff + elementsOffset(length), length.toL * elementByteSize, 0.toByte),
       aoff)
   }
 

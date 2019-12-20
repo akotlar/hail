@@ -75,6 +75,37 @@ object Region {
     }
   }
 
+  def setMemoryFastZeroOne(address: Long, nBytes: Long, b: Byte): Unit = {
+    assert((address & 0x3) == 0)
+    assert(b == -1 || b == 0)
+
+    var bytesRead: Long = 0
+
+    if ((address & 0x7) != 0 && nBytes >= 8) {
+      Memory.storeInt(address + bytesRead, b.toInt)
+
+      bytesRead += 4
+    }
+
+    while (nBytes - bytesRead >= 8) {
+      Memory.storeLong(address + bytesRead, b.toLong)
+
+      bytesRead += 8
+    }
+
+    while (nBytes - bytesRead >= 4) {
+      Memory.storeInt(address + bytesRead, b.toInt)
+
+      bytesRead += 4
+    }
+
+    while (nBytes - bytesRead >= 1) {
+      Memory.storeByte(address + bytesRead, b)
+
+      bytesRead += 1
+    }
+  }
+
   def loadBit(byteOff: Long, bitOff: Long): Boolean = {
     val b = byteOff + (bitOff >> 3)
     (loadByte(b) & (1 << (bitOff & 7))) != 0
@@ -155,6 +186,9 @@ object Region {
 
   def setMemory(offset: Code[Long], size: Code[Long], b: Code[Byte]): Code[Unit] =
     Code.invokeScalaObject[Long, Long, Byte, Unit](Region.getClass, "setMemory", offset, size, b)
+
+  def setMemoryFastZeroOne(offset: Code[Long], size: Code[Long], b: Code[Byte]): Code[Unit] =
+    Code.invokeScalaObject[Long, Long, Byte, Unit](Region.getClass, "setMemoryFastZeroOne", offset, size, b)
 
   def containsNonZeroBits(address: Code[Long], nBits: Code[Long]): Code[Boolean] =
     Code.invokeScalaObject[Long, Long, Boolean](Region.getClass, "containsNonZeroBits", address, nBits)
