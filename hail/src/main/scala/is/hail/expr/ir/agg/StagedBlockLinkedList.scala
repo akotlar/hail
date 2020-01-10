@@ -27,14 +27,14 @@ class StagedBlockLinkedList(val elemType: PType, val fb: EmitFunctionBuilder[_])
     "totalCount" -> PInt32Required)
 
   def load(src: Code[Long]): Code[Unit] = Code(
-    firstNode := Region.loadAddress(storageType.fieldOffset(src, "firstNode")),
-    lastNode := Region.loadAddress(storageType.fieldOffset(src, "lastNode")),
-    totalCount := Region.loadInt(storageType.fieldOffset(src, "totalCount")))
+    firstNode := Region.loadAddress(storageType.fieldAddress(src, "firstNode")),
+    lastNode := Region.loadAddress(storageType.fieldAddress(src, "lastNode")),
+    totalCount := Region.loadInt(storageType.fieldAddress(src, "totalCount")))
 
   def store(dst: Code[Long]): Code[Unit] = Code(
-    Region.storeAddress(storageType.fieldOffset(dst, "firstNode"), firstNode),
-    Region.storeAddress(storageType.fieldOffset(dst, "lastNode"), lastNode),
-    Region.storeInt(storageType.fieldOffset(dst, "totalCount"), totalCount))
+    Region.storeAddress(storageType.fieldAddress(dst, "firstNode"), firstNode),
+    Region.storeAddress(storageType.fieldAddress(dst, "lastNode"), lastNode),
+    Region.storeInt(storageType.fieldAddress(dst, "totalCount"), totalCount))
 
   type Node = Code[Long]
 
@@ -47,31 +47,31 @@ class StagedBlockLinkedList(val elemType: PType, val fb: EmitFunctionBuilder[_])
     "next" -> PInt64Required)
 
   private def buffer(n: Node): Code[Long] =
-    Region.loadAddress(nodeType.fieldOffset(n, "buf"))
+    Region.loadAddress(nodeType.fieldAddress(n, "buf"))
 
   private[agg] def capacity(n: Node): Code[Int] =
     bufferType.loadLength(buffer(n))
 
   private def count(n: Node): Code[Int] =
-    Region.loadInt(nodeType.fieldOffset(n, "count"))
+    Region.loadInt(nodeType.fieldAddress(n, "count"))
 
   private def incrCount(n: Node): Code[Unit] =
-    Region.storeInt(nodeType.fieldOffset(n, "count"), count(n) + 1)
+    Region.storeInt(nodeType.fieldAddress(n, "count"), count(n) + 1)
 
   private def next(n: Node): Node =
-    Region.loadAddress(nodeType.fieldOffset(n, "next"))
+    Region.loadAddress(nodeType.fieldAddress(n, "next"))
 
   private def hasNext(n: Node): Code[Boolean] =
     next(n) cne nil
 
   private def setNext(n: Node, nNext: Node): Code[Unit] =
-    Region.storeAddress(nodeType.fieldOffset(n, "next"), nNext)
+    Region.storeAddress(nodeType.fieldAddress(n, "next"), nNext)
 
   private def initNode(n: Node, buf: Code[Long], count: Code[Int]): Code[Unit] =
     Code(
-      Region.storeAddress(nodeType.fieldOffset(n, "buf"), buf),
-      Region.storeInt(nodeType.fieldOffset(n, "count"), count),
-      Region.storeAddress(nodeType.fieldOffset(n, "next"), nil))
+      Region.storeAddress(nodeType.fieldAddress(n, "buf"), buf),
+      Region.storeInt(nodeType.fieldAddress(n, "count"), count),
+      Region.storeAddress(nodeType.fieldAddress(n, "next"), nil))
 
   private def pushPresent(n: Node, store: Code[Long] => Code[Unit]): Code[Unit] =
     Code(

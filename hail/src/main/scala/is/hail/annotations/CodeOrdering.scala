@@ -53,8 +53,8 @@ object CodeOrdering {
       Code(
         m1 := t1.isFieldMissing(x, i),
         m2 := t2.isFieldMissing(y, i),
-        v1s(i).storeAny(m1.mux(ir.defaultValue(tf1), Region.loadIRIntermediate(tf1)(t1.fieldOffset(x, i)))),
-        v2s(i).storeAny(m2.mux(ir.defaultValue(tf2), Region.loadIRIntermediate(tf2)(t2.fieldOffset(y, i)))))
+        v1s(i).storeAny(m1.mux(ir.defaultValue(tf1), Region.loadIRIntermediate(tf1)(t1.fieldAddress(x, i)))),
+        v2s(i).storeAny(m2.mux(ir.defaultValue(tf2), Region.loadIRIntermediate(tf2)(t2.fieldAddress(y, i)))))
     }
 
     private[this] def fieldOrdering(i: Int, op: CodeOrdering.Op): CodeOrdering.F[op.ReturnType] =

@@ -355,15 +355,15 @@ class RegionValueBuilder(var region: Region) {
       if (t.isFieldDefined(fromRegion, fromOff, i)) {
         t.types(i) match {
           case t2: PBaseStruct =>
-            fixupStruct(t2, t.fieldOffset(toOff, i), fromRegion, t.fieldOffset(fromOff, i))
+            fixupStruct(t2, t.fieldAddress(toOff, i), fromRegion, t.fieldAddress(fromOff, i))
 
           case _: PBinary =>
             val toBOff = fixupBinary(fromRegion, t.loadField(fromRegion, fromOff, i))
-            Region.storeAddress(t.fieldOffset(toOff, i), toBOff)
+            Region.storeAddress(t.fieldAddress(toOff, i), toBOff)
 
           case t2: PArray =>
             val toAOff = fixupArray(t2, fromRegion, t.loadField(fromRegion, fromOff, i))
-            Region.storeAddress(t.fieldOffset(toOff, i), toAOff)
+            Region.storeAddress(t.fieldAddress(toOff, i), toAOff)
 
           case _ =>
         }

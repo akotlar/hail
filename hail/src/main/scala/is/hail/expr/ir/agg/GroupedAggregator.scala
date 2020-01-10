@@ -28,15 +28,15 @@ class GroupedBTreeKey(kt: PType, fb: EmitFunctionBuilder[_], region: Code[Region
   override def compWithKey(off: Code[Long], k: (Code[Boolean], Code[_])): Code[Int] =
     compLoader.invoke[Int](off, k._1, k._2)
 
-  val regionIdx: Code[Int] = Region.loadInt(storageType.fieldOffset(offset, 1))
+  val regionIdx: Code[Int] = Region.loadInt(storageType.fieldAddress(offset, 1))
   val container = new TupleAggregatorState(fb, states, region, containerOffset(offset), regionIdx)
 
   def isKeyMissing(off: Code[Long]): Code[Boolean] =
     storageType.isFieldMissing(off, 0)
-  def loadKey(off: Code[Long]): Code[_] = Region.loadIRIntermediate(kt)(storageType.fieldOffset(off, 0))
+  def loadKey(off: Code[Long]): Code[_] = Region.loadIRIntermediate(kt)(storageType.fieldAddress(off, 0))
 
   def initValue(dest: Code[Long], km: Code[Boolean], kv: Code[_], rIdx: Code[Int]): Code[Unit] = {
-    val koff = storageType.fieldOffset(dest, 0)
+    val koff = storageType.fieldAddress(dest, 0)
     var storeK =
       if (kt.isPrimitive)
         Region.storeIRIntermediate(kt)(koff, kv)
@@ -56,15 +56,15 @@ class GroupedBTreeKey(kt: PType, fb: EmitFunctionBuilder[_], region: Code[Region
   def copyStatesFrom(srcOff: Code[Long]): Code[Unit] = container.copyFrom(srcOff)
 
   def storeRegionIdx(off: Code[Long], idx: Code[Int]): Code[Unit] =
-    Region.storeInt(storageType.fieldOffset(off, 1), idx)
+    Region.storeInt(storageType.fieldAddress(off, 1), idx)
 
   def containerOffset(off: Code[Long]): Code[Long] =
-    storageType.fieldOffset(off, 2)
+    storageType.fieldAddress(off, 2)
 
   def isEmpty(off: Code[Long]): Code[Boolean] =
-    Region.loadInt(storageType.fieldOffset(off, 1)) < 0
+    Region.loadInt(storageType.fieldAddress(off, 1)) < 0
   def initializeEmpty(off: Code[Long]): Code[Unit] =
-    Region.storeInt(storageType.fieldOffset(off, 1), -1)
+    Region.storeInt(storageType.fieldAddress(off, 1), -1)
 
   def copy(src: Code[Long], dest: Code[Long]): Code[Unit] =
     Region.copyFrom(src, dest, storageType.byteSize)
@@ -132,8 +132,8 @@ class DictState(val fb: EmitFunctionBuilder[_], val keyType: PType, val nested: 
 
   override def store(regionStorer: Code[Region] => Code[Unit], dest: Code[Long]): Code[Unit] = {
     Code(
-      Region.storeInt(typ.fieldOffset(off, 1), size),
-      Region.storeAddress(typ.fieldOffset(off, 2), root),
+      Region.storeInt(typ.fieldAddress(off, 1), size),
+      Region.storeAddress(typ.fieldAddress(off, 2), root),
       super.store(regionStorer, dest))
   }
 

@@ -296,7 +296,7 @@ class OrderingSuite extends HailSuite {
         val cetuple = fb.getArg[Long](3)
 
         val bs = new BinarySearch(fb.apply_method, pset, keyOnly = false)
-        fb.emit(bs.getClosestIndex(cset, false, Region.loadIRIntermediate(pt)(pTuple.fieldOffset(cetuple, 0))))
+        fb.emit(bs.getClosestIndex(cset, false, Region.loadIRIntermediate(pt)(pTuple.fieldAddress(cetuple, 0))))
 
         val asArray = SafeIndexedSeq(pArray, region, soff)
 
@@ -337,7 +337,7 @@ class OrderingSuite extends HailSuite {
 
         val bs = new BinarySearch(fb.apply_method, pDict, keyOnly = true)
         val m = ptuple.isFieldMissing(cregion, cktuple, 0)
-        val v = Region.loadIRIntermediate(pDict.keyType)(ptuple.fieldOffset(cktuple, 0))
+        val v = Region.loadIRIntermediate(pDict.keyType)(ptuple.fieldAddress(cktuple, 0))
         fb.emit(bs.getClosestIndex(cdict, m, v))
 
         val asArray = SafeIndexedSeq(PArray(pDict.elementType), region, soff)

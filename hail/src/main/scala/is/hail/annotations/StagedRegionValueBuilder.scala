@@ -18,12 +18,12 @@ object StagedRegionValueBuilder {
           case t@(_: PBinary | _: PArray) =>
             val off = fb.newField[Long]
             Code(
-              off := typ.fieldOffset(value, f.index),
+              off := typ.fieldAddress(value, f.index),
               Region.storeAddress(off, deepCopyFromOffset(fb, region, t, coerce[Long](Region.loadIRIntermediate(t)(off))))
             )
           case t: PBaseStruct =>
             val off = fb.newField[Long]
-            Code(off := typ.fieldOffset(value, f.index),
+            Code(off := typ.fieldAddress(value, f.index),
               fixupStruct(fb, region, t, off))
         }
         typ.isFieldDefined(region, value, f.index).mux(fix, Code._empty)

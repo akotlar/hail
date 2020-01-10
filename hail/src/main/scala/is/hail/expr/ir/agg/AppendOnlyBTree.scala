@@ -49,14 +49,14 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
   private def setKeyPresent(node: Code[Long], i: Int): Code[Unit] = elementsType.setFieldPresent(elements(node), i)
   private def setKeyMissing(node: Code[Long], i: Int): Code[Unit] = elementsType.setFieldMissing(elements(node), i)
   private def isFull(node: Code[Long]): Code[Boolean] = hasKey(node, maxElements - 1)
-  private def keyOffset(node: Code[Long], i: Int): Code[Long] = eltType.fieldOffset(elementsType.loadField(elements(node), i), 0)
+  private def keyOffset(node: Code[Long], i: Int): Code[Long] = eltType.fieldAddress(elementsType.loadField(elements(node), i), 0)
   private def loadKey(node: Code[Long], i: Int): Code[Long] = eltType.loadField(elementsType.loadField(elements(node), i), 0)
 
   private def childOffset(node: Code[Long], i: Int): Code[Long] =
     if (i == -1)
-      storageType.fieldOffset(node, 1)
+      storageType.fieldAddress(node, 1)
     else
-      eltType.fieldOffset(elementsType.loadField(elements(node), i), 1)
+      eltType.fieldAddress(elementsType.loadField(elements(node), i), 1)
   private def loadChild(node: Code[Long], i: Int): Code[Long] =
     Region.loadAddress(childOffset(node, i))
   private def setChild(parent: Code[Long], i: Int, child: Code[Long]): Code[Unit] =
@@ -64,7 +64,7 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
       if (i == -1) storageType.setFieldPresent(parent, 1) else Code._empty,
       Region.storeAddress(childOffset(parent, i), child),
       storageType.setFieldPresent(child, 0),
-      Region.storeAddress(storageType.fieldOffset(child, 0), parent))
+      Region.storeAddress(storageType.fieldAddress(child, 0), parent))
 
   private val insert: EmitMethodBuilder = {
     val insertAt = fb.newMethod("btree_insert", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Int], typeInfo[Boolean], typeToTypeInfo(key.compType), typeInfo[Long]), typeInfo[Long])

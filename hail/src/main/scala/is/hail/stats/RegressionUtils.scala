@@ -32,8 +32,8 @@ object RegressionUtils {
       if (entryArrayType.isElementDefined(region, entryArrayOffset, k)) {
         val entryOffset = entryArrayType.loadElement(region, entryArrayOffset, k)
         if (entryType.isFieldDefined(region, entryOffset, fieldIdx)) {
-          val fieldOffset = entryType.loadField(region, entryOffset, fieldIdx)
-          val e = Region.loadDouble(fieldOffset)
+          val fieldAddress = entryType.loadField(region, entryOffset, fieldIdx)
+          val e = Region.loadDouble(fieldAddress)
           sum += e
           data(offset + j) = e
         } else

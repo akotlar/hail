@@ -145,7 +145,7 @@ final case class EBaseStruct(fields: IndexedSeq[EField], override val required: 
           val i = ft.fieldIdx(ef.name)
           val pf = ft.fields(i)
           val encodeField = ef.typ.buildEncoder(pf.typ, groupMB)
-          val v = Region.loadIRIntermediate(pf.typ)(ft.fieldOffset(addr, i))
+          val v = Region.loadIRIntermediate(pf.typ)(ft.fieldAddress(addr, i))
           ft.isFieldDefined(addr, i).mux(
             encodeField(v, out2),
             Code._empty[Unit]
@@ -195,7 +195,7 @@ final case class EBaseStruct(fields: IndexedSeq[EField], override val required: 
         if (t.hasField(f.name)) {
           val rf = t.field(f.name)
           val readElemF = f.typ.buildInplaceDecoder(rf.typ, mb)
-          val rFieldAddr = t.fieldOffset(addrArg, rf.index)
+          val rFieldAddr = t.fieldAddress(addrArg, rf.index)
           if (f.typ.required)
             readElemF(regionArg, rFieldAddr, inArg)
           else

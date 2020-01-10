@@ -217,34 +217,34 @@ abstract class PBaseStruct extends PType {
   def setFieldPresent(region: Code[Region], offset: Code[Long], fieldIdx: Int): Code[Unit] =
     setFieldPresent(offset, fieldIdx)
 
-  def fieldOffset(offset: Long, fieldIdx: Int): Long =
-    offset + byteOffsets(fieldIdx)
+  def fieldAddress(structAddress: Long, fieldIdx: Int): Long =
+    structAddress + byteOffsets(fieldIdx)
 
-  def fieldOffset(offset: Code[Long], fieldIdx: Int): Code[Long] =
-    offset + byteOffsets(fieldIdx)
+  def fieldAddress(structAddress: Code[Long], fieldIdx: Int): Code[Long] =
+    structAddress + byteOffsets(fieldIdx)
 
   def loadField(rv: RegionValue, fieldIdx: Int): Long = loadField(rv.region, rv.offset, fieldIdx)
 
   def loadField(region: Region, offset: Long, fieldIdx: Int): Long = loadField(offset, fieldIdx)
 
   def loadField(offset: Long, fieldIdx: Int): Long = {
-    val off = fieldOffset(offset, fieldIdx)
+    val addr = fieldAddress(offset, fieldIdx)
     types(fieldIdx).fundamentalType match {
-      case _: PArray | _: PBinary => Region.loadAddress(off)
-      case _ => off
+      case _: PArray | _: PBinary => Region.loadAddress(addr)
+      case _ => addr
     }
   }
 
   def loadField(offset: Code[Long], fieldIdx: Int): Code[Long] =
-    loadField(fieldOffset(offset, fieldIdx), types(fieldIdx))
+    loadField(fieldAddress(offset, fieldIdx), types(fieldIdx))
 
   def loadField(region: Code[Region], offset: Code[Long], fieldIdx: Int): Code[Long] =
-    loadField(fieldOffset(offset, fieldIdx), types(fieldIdx))
+    loadField(fieldAddress(offset, fieldIdx), types(fieldIdx))
 
-  private def loadField(fieldOffset: Code[Long], fieldType: PType): Code[Long] = {
+  private def loadField(fieldAddress: Code[Long], fieldType: PType): Code[Long] = {
     fieldType.fundamentalType match {
-      case _: PArray | _: PBinary => Region.loadAddress(fieldOffset)
-      case _ => fieldOffset
+      case _: PArray | _: PBinary => Region.loadAddress(fieldAddress)
+      case _ => fieldAddress
     }
   }
 

@@ -228,7 +228,7 @@ class EmitFunctionBuilder[F >: Null](
     val mb2 = new EmitMethodBuilder(this, "addLiterals", Array(typeInfo[Array[Byte]]), typeInfo[Unit])
     val off = mb2.newLocal[Long]
     val storeFields = literals.zipWithIndex.map { case (((_, _), f), i) =>
-      f.storeAny(Region.loadIRIntermediate(litType.types(i))(litType.fieldOffset(off, i)))
+      f.storeAny(Region.loadIRIntermediate(litType.types(i))(litType.fieldAddress(off, i)))
     }
 
     mb2.emit(Code(

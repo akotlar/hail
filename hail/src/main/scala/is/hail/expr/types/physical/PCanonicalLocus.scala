@@ -89,8 +89,8 @@ final case class PCanonicalLocus(rgBc: BroadcastRG, required: Boolean = false) e
         val s1 = PString.loadString(c1)
         val s2 = PString.loadString(c2)
 
-        val p1 = Region.loadInt(representation.fieldOffset(x, 1))
-        val p2 = Region.loadInt(representation.fieldOffset(y, 1))
+        val p1 = Region.loadInt(representation.fieldAddress(x, 1))
+        val p2 = Region.loadInt(representation.fieldAddress(y, 1))
 
         val cmp = bincmp.compareNonnull(coerce[bincmp.T](c1), coerce[bincmp.T](c2))
         val codeRG = mb.getReferenceGenome(rg.asInstanceOf[ReferenceGenome])

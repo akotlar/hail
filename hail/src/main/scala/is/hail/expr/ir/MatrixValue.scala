@@ -258,8 +258,8 @@ case class MatrixValue(
           if (localEntryArrayPType.isElementDefined(region, entryArrayOffset, j)) {
             val entryOffset = localEntryArrayPType.loadElement(region, entryArrayOffset, j)
             if (localEntryPType.isFieldDefined(region, entryOffset, fieldIdx)) {
-              val fieldOffset = localEntryPType.loadField(region, entryOffset, fieldIdx)
-              data(j) = Region.loadDouble(fieldOffset)
+              val fieldAddress = localEntryPType.loadField(region, entryOffset, fieldIdx)
+              data(j) = Region.loadDouble(fieldAddress)
             } else
               fatal(s"Cannot create RowMatrix: missing value at row $i and col $j")
           } else

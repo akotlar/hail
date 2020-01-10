@@ -25,8 +25,8 @@ object CallStatsState {
 }
 
 class CallStatsState(val fb: EmitFunctionBuilder[_]) extends PointerBasedRVAState {
-  val alleleCountsOffset: Code[Long] = CallStatsState.stateType.fieldOffset(off, 0)
-  val homCountsOffset: Code[Long] = CallStatsState.stateType.fieldOffset(off, 1)
+  val alleleCountsOffset: Code[Long] = CallStatsState.stateType.fieldAddress(off, 0)
+  val homCountsOffset: Code[Long] = CallStatsState.stateType.fieldAddress(off, 1)
   val alleleCounts: Code[Long] = CallStatsState.stateType.loadField(off, 0)
   val homCounts: Code[Long] = CallStatsState.stateType.loadField(off, 1)
   val nAlleles: ClassFieldRef[Int] = fb.newField[Int]

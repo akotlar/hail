@@ -19,9 +19,9 @@ class StagedArrayBuilder(eltType: PType, fb: EmitFunctionBuilder[_], region: Cod
   val data = fb.newField[Long]("data")
 
   private val tmpOff = fb.newField[Long]("tmp_offset")
-  private val currentSizeOffset: Code[Long] => Code[Long] = stateType.fieldOffset(_, 0)
-  private val capacityOffset: Code[Long] => Code[Long] = stateType.fieldOffset(_, 1)
-  private val dataOffset: Code[Long] => Code[Long] = stateType.fieldOffset(_, 2)
+  private val currentSizeOffset: Code[Long] => Code[Long] = stateType.fieldAddress(_, 0)
+  private val capacityOffset: Code[Long] => Code[Long] = stateType.fieldAddress(_, 1)
+  private val dataOffset: Code[Long] => Code[Long] = stateType.fieldAddress(_, 2)
 
   def loadFrom(src: Code[Long]): Code[Unit] = {
     Code(

@@ -18,9 +18,9 @@ class DownsampleBTreeKey(binType: PBaseStruct, pointType: PBaseStruct, fb: EmitF
   val compType: PType = binType
   private val kcomp = fb.getCodeOrdering(binType, CodeOrdering.compare, ignoreMissingness = false)
 
-  def isEmpty(off: Code[Long]): Code[Boolean] = coerce[Boolean](Region.loadIRIntermediate(PBooleanRequired)(storageType.fieldOffset(off, "empty")))
+  def isEmpty(off: Code[Long]): Code[Boolean] = coerce[Boolean](Region.loadIRIntermediate(PBooleanRequired)(storageType.fieldAddress(off, "empty")))
 
-  def initializeEmpty(off: Code[Long]): Code[Unit] = Region.storeBoolean(storageType.fieldOffset(off, "empty"), true)
+  def initializeEmpty(off: Code[Long]): Code[Unit] = Region.storeBoolean(storageType.fieldAddress(off, "empty"), true)
 
   def copy(src: Code[Long], dest: Code[Long]): Code[Unit] = Region.copyFrom(src, dest, storageType.byteSize)
 
@@ -130,8 +130,8 @@ class DownsampleState(val fb: EmitFunctionBuilder[_], labelType: PArray, maxBuff
         bufferRight := Region.loadDouble(storageType.loadField(off, "bufferRight")),
         bufferBottom := Region.loadDouble(storageType.loadField(off, "bufferBottom")),
         bufferTop := Region.loadDouble(storageType.loadField(off, "bufferTop")),
-        buffer.loadFrom(storageType.fieldOffset(off, "buffer")),
-        root := Region.loadAddress(storageType.fieldOffset(off, "tree"))
+        buffer.loadFrom(storageType.fieldAddress(off, "buffer")),
+        root := Region.loadAddress(storageType.fieldAddress(off, "tree"))
       )
 
     )
@@ -142,18 +142,18 @@ class DownsampleState(val fb: EmitFunctionBuilder[_], labelType: PArray, maxBuff
     val mb = fb.newMethod("downsample_store", Array[TypeInfo[_]](), UnitInfo)
     mb.emit(Code(
       off := dest,
-      Region.storeInt(storageType.fieldOffset(off, "nDivisions"), nDivisions),
-      Region.storeInt(storageType.fieldOffset(off, "treeSize"), treeSize),
-      Region.storeDouble(storageType.fieldOffset(off, "left"), left),
-      Region.storeDouble(storageType.fieldOffset(off, "right"), right),
-      Region.storeDouble(storageType.fieldOffset(off, "bottom"), bottom),
-      Region.storeDouble(storageType.fieldOffset(off, "top"), top),
-      Region.storeDouble(storageType.fieldOffset(off, "bufferLeft"), bufferLeft),
-      Region.storeDouble(storageType.fieldOffset(off, "bufferRight"), bufferRight),
-      Region.storeDouble(storageType.fieldOffset(off, "bufferBottom"), bufferBottom),
-      Region.storeDouble(storageType.fieldOffset(off, "bufferTop"), bufferTop),
-      buffer.storeTo(storageType.fieldOffset(off, "buffer")),
-      Region.storeAddress(storageType.fieldOffset(off, "tree"), root)
+      Region.storeInt(storageType.fieldAddress(off, "nDivisions"), nDivisions),
+      Region.storeInt(storageType.fieldAddress(off, "treeSize"), treeSize),
+      Region.storeDouble(storageType.fieldAddress(off, "left"), left),
+      Region.storeDouble(storageType.fieldAddress(off, "right"), right),
+      Region.storeDouble(storageType.fieldAddress(off, "bottom"), bottom),
+      Region.storeDouble(storageType.fieldAddress(off, "top"), top),
+      Region.storeDouble(storageType.fieldAddress(off, "bufferLeft"), bufferLeft),
+      Region.storeDouble(storageType.fieldAddress(off, "bufferRight"), bufferRight),
+      Region.storeDouble(storageType.fieldAddress(off, "bufferBottom"), bufferBottom),
+      Region.storeDouble(storageType.fieldAddress(off, "bufferTop"), bufferTop),
+      buffer.storeTo(storageType.fieldAddress(off, "buffer")),
+      Region.storeAddress(storageType.fieldAddress(off, "tree"), root)
     ))
 
     Code(
@@ -233,9 +233,9 @@ class DownsampleState(val fb: EmitFunctionBuilder[_], labelType: PArray, maxBuff
           tree.init,
           tree.bulkLoad(ib) { (ib, dest) =>
             Code(
-              binDec.invoke(region, key.storageType.fieldOffset(dest, "bin"), ib),
-              pointDec.invoke(region, key.storageType.fieldOffset(dest, "point"), ib),
-              Region.storeBoolean(key.storageType.fieldOffset(dest, "empty"), false))
+              binDec.invoke(region, key.storageType.fieldAddress(dest, "bin"), ib),
+              pointDec.invoke(region, key.storageType.fieldAddress(dest, "point"), ib),
+              Region.storeBoolean(key.storageType.fieldAddress(dest, "empty"), false))
           },
           buffer.initialize(),
           serializationEndTag := ib.readInt(),
@@ -273,8 +273,8 @@ class DownsampleState(val fb: EmitFunctionBuilder[_], labelType: PArray, maxBuff
 
       mb.emit(Code(
         binStaging := storageType.loadField(off, "binStaging"),
-        Region.storeInt(binType.fieldOffset(binStaging, "x"), binX),
-        Region.storeInt(binType.fieldOffset(binStaging, "y"), binY),
+        Region.storeInt(binType.fieldAddress(binStaging, "x"), binX),
+        Region.storeInt(binType.fieldAddress(binStaging, "y"), binY),
         insertOffset := tree.getOrElseInitialize(false, binStaging),
         key.isEmpty(insertOffset).orEmpty(
           Code(
@@ -437,16 +437,16 @@ class DownsampleState(val fb: EmitFunctionBuilder[_], labelType: PArray, maxBuff
       mb.emit(Code(
         (!(isFinite(x) && isFinite(y))).orEmpty(Code._return[Unit](Code._empty)),
         pointStaging := storageType.loadField(off, "pointStaging"),
-        Region.storeDouble(pointType.fieldOffset(pointStaging, "x"), x),
-        Region.storeDouble(pointType.fieldOffset(pointStaging, "y"), y),
+        Region.storeDouble(pointType.fieldAddress(pointStaging, "x"), x),
+        Region.storeDouble(pointType.fieldAddress(pointStaging, "y"), y),
         (if (labelType.required)
-          StagedRegionValueBuilder.deepCopy(fb, region, labelType, l, pointType.fieldOffset(pointStaging, "label"))
+          StagedRegionValueBuilder.deepCopy(fb, region, labelType, l, pointType.fieldAddress(pointStaging, "label"))
         else
           lm.mux(
             pointType.setFieldMissing(pointStaging, "label"),
             Code(
               pointType.setFieldPresent(pointStaging, "label"),
-              StagedRegionValueBuilder.deepCopy(fb, region, labelType, l, pointType.fieldOffset(pointStaging, "label"))))),
+              StagedRegionValueBuilder.deepCopy(fb, region, labelType, l, pointType.fieldAddress(pointStaging, "label"))))),
         binAndInsert(x, y, pointStaging, deepCopy = false)))
     }
 

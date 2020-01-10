@@ -42,7 +42,7 @@ class ArrayElementState(val fb: EmitFunctionBuilder[_], val nested: StateTuple) 
     Code(
       region.setNumParents((lenRef + 1) * nStates),
       aoff := arrayType.allocate(region, lenRef),
-      Region.storeAddress(typ.fieldOffset(off, 1), aoff),
+      Region.storeAddress(typ.fieldAddress(off, 1), aoff),
       arrayType.stagedInitialize(aoff, lenRef),
       typ.setFieldPresent(region, off, 1))
 

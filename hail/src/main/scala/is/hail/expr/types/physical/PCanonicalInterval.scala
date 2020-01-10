@@ -33,9 +33,9 @@ final case class PCanonicalInterval(pointType: PType, override val required: Boo
 
     def copy(required: Boolean = this.required): PInterval = PCanonicalInterval(this.pointType, required)
 
-    def startOffset(off: Code[Long]): Code[Long] = representation.fieldOffset(off, 0)
+    def startOffset(off: Code[Long]): Code[Long] = representation.fieldAddress(off, 0)
 
-    def endOffset(off: Code[Long]): Code[Long] = representation.fieldOffset(off, 1)
+    def endOffset(off: Code[Long]): Code[Long] = representation.fieldAddress(off, 1)
 
     def loadStart(region: Region, off: Long): Long = representation.loadField(region, off, 0)
 

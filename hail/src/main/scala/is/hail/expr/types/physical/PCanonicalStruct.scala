@@ -235,7 +235,7 @@ final case class PCanonicalStruct(fields: IndexedSeq[PField], required: Boolean 
 
   def isFieldMissing(offset: Code[Long], field: String): Code[Boolean] = isFieldMissing(offset, fieldIdx(field))
 
-  def fieldOffset(offset: Code[Long], fieldName: String): Code[Long] = fieldOffset(offset, fieldIdx(fieldName))
+  def fieldAddress(offset: Code[Long], fieldName: String): Code[Long] = fieldAddress(offset, fieldIdx(fieldName))
 
   def setFieldPresent(offset: Code[Long], field: String): Code[Unit] = setFieldPresent(offset, fieldIdx(field))
 

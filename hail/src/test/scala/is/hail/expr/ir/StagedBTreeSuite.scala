@@ -27,7 +27,7 @@ class TestBTreeKey(mb: EmitMethodBuilder) extends BTreeKey {
       storageType.stagedInitialize(off),
       m.mux(
         storageType.setFieldMissing(off, 0),
-        Region.storeLong(storageType.fieldOffset(off, 0), v)))
+        Region.storeLong(storageType.fieldAddress(off, 0), v)))
 
   def copy(src: Code[Long], dest: Code[Long]): Code[Unit] =
     Region.copyFrom(src, dest, storageType.byteSize)
@@ -39,7 +39,7 @@ class TestBTreeKey(mb: EmitMethodBuilder) extends BTreeKey {
 
   def loadCompKey(off: Code[Long]): (Code[Boolean], Code[_]) =
     storageType.isFieldMissing(off, 0) -> storageType.isFieldMissing(off, 0).mux(
-      0L, Region.loadLong(storageType.fieldOffset(off, 0)))
+      0L, Region.loadLong(storageType.fieldAddress(off, 0)))
 }
 
 object BTreeBackedSet {

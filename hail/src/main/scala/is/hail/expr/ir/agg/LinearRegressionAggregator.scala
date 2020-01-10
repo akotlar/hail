@@ -27,10 +27,10 @@ object LinearRegressionAggregator extends StagedAggregator {
       Code._empty),
     state.off := stateType.allocate(state.region),
     Region.storeAddress(
-      stateType.fieldOffset(state.off, 0),
+      stateType.fieldAddress(state.off, 0),
       vector.zeroes(mb, state.region, k)),
     Region.storeAddress(
-      stateType.fieldOffset(state.off, 1),
+      stateType.fieldAddress(state.off, 1),
       vector.zeroes(mb, state.region, k*k)),
     Region.storeInt(
       stateType.loadField(state.off, 2),

@@ -120,38 +120,38 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
 
   private def storeFields(dest: Code[Long]): Code[Unit] = {
     maybeGCCode(
-      ab.storeTo(storageType.fieldOffset(dest, 0)),
-      Region.storeAddress(storageType.fieldOffset(dest, 1), staging),
-      Region.storeAddress(storageType.fieldOffset(dest, 2), keyStage),
-      Region.storeLong(storageType.fieldOffset(dest, 3), maxIndex),
-      Region.storeInt(storageType.fieldOffset(dest, 4), maxSize)
+      ab.storeTo(storageType.fieldAddress(dest, 0)),
+      Region.storeAddress(storageType.fieldAddress(dest, 1), staging),
+      Region.storeAddress(storageType.fieldAddress(dest, 2), keyStage),
+      Region.storeLong(storageType.fieldAddress(dest, 3), maxIndex),
+      Region.storeInt(storageType.fieldAddress(dest, 4), maxSize)
     )(Array(
-      Region.storeInt(storageType.fieldOffset(dest, 5), garbage),
-      Region.storeInt(storageType.fieldOffset(dest, 6), maxGarbage)
+      Region.storeInt(storageType.fieldAddress(dest, 5), garbage),
+      Region.storeInt(storageType.fieldAddress(dest, 6), maxGarbage)
     ))
   }
 
   private def loadFields(src: Code[Long]): Code[Unit] = {
     maybeGCCode(
-      ab.loadFrom(storageType.fieldOffset(src, 0)),
-      staging := Region.loadAddress(storageType.fieldOffset(src, 1)),
-      keyStage := Region.loadAddress(storageType.fieldOffset(src, 2)),
-      maxIndex := Region.loadLong(storageType.fieldOffset(src, 3)),
-      maxSize := Region.loadInt(storageType.fieldOffset(src, 4))
+      ab.loadFrom(storageType.fieldAddress(src, 0)),
+      staging := Region.loadAddress(storageType.fieldAddress(src, 1)),
+      keyStage := Region.loadAddress(storageType.fieldAddress(src, 2)),
+      maxIndex := Region.loadLong(storageType.fieldAddress(src, 3)),
+      maxSize := Region.loadInt(storageType.fieldAddress(src, 4))
     )(Array(
-      garbage := Region.loadInt(storageType.fieldOffset(src, 5)),
-      maxGarbage := Region.loadInt(storageType.fieldOffset(src, 6))
+      garbage := Region.loadInt(storageType.fieldAddress(src, 5)),
+      maxGarbage := Region.loadInt(storageType.fieldAddress(src, 6))
     ))
   }
 
   def copyFrom(src: Code[Long]): Code[Unit] = {
     maybeGCCode(
       initStaging(),
-      ab.copyFrom(storageType.fieldOffset(src, 0)),
-      maxIndex := Region.loadLong(storageType.fieldOffset(src, 3)),
-      maxSize := Region.loadInt(storageType.fieldOffset(src, 4)))(
+      ab.copyFrom(storageType.fieldAddress(src, 0)),
+      maxIndex := Region.loadLong(storageType.fieldAddress(src, 3)),
+      maxSize := Region.loadInt(storageType.fieldAddress(src, 4)))(
       Array(
-        maxGarbage := Region.loadInt(storageType.fieldOffset(src, 4))
+        maxGarbage := Region.loadInt(storageType.fieldAddress(src, 4))
       ))
   }
 
@@ -187,11 +187,11 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
 
   //  NOTE: these print methods are unused but helpful for debugging, should the need arise:
   //
-  //  def indexedKeyRepElt(o: Code[Long]): Code[String] = indexedKeyRep(eltTuple.fieldOffset(o, 0))
+  //  def indexedKeyRepElt(o: Code[Long]): Code[String] = indexedKeyRep(eltTuple.fieldAddress(o, 0))
   //
   //  def indexedKeyRep(o: Code[Long]): Code[String] = {
   //    val kr = keyRep(loadKeyValue(o), keyIsMissing(o))
-  //    val idx = Region.loadLong(indexedKeyType.fieldOffset(o, 1)).toS
+  //    val idx = Region.loadLong(indexedKeyType.fieldAddress(o, 1)).toS
   //    kr.concat(" [").concat(idx).concat("]")
   //
   //  }
@@ -223,7 +223,7 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
 
   private def keyIsMissing(offset: Code[Long]): Code[Boolean] = indexedKeyType.isFieldMissing(offset, 0)
 
-  private def loadKeyValue(offset: Code[Long]): Code[_] = Region.loadIRIntermediate(keyType)(indexedKeyType.fieldOffset(offset, 0))
+  private def loadKeyValue(offset: Code[Long]): Code[_] = Region.loadIRIntermediate(keyType)(indexedKeyType.fieldAddress(offset, 0))
 
   private def loadKey(offset: Code[Long]): (Code[Boolean], Code[_]) = (keyIsMissing(offset), loadKeyValue(offset))
 
@@ -232,7 +232,7 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
     val i = mb.getArg[Long](1)
     val j = mb.getArg[Long](2)
 
-    mb.emit(compareIndexedKey(eltTuple.fieldOffset(i, 0), eltTuple.fieldOffset(j, 0)))
+    mb.emit(compareIndexedKey(eltTuple.fieldAddress(i, 0), eltTuple.fieldAddress(j, 0)))
 
     mb.invoke(_, _)
   }
@@ -328,15 +328,15 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
 
   private def stageAndIndexKey(km: Code[Boolean], k: Code[_]): Code[Unit] = Code(
     if (keyType.required)
-      Region.storeIRIntermediate(keyType)(indexedKeyType.fieldOffset(keyStage, 0), k)
+      Region.storeIRIntermediate(keyType)(indexedKeyType.fieldAddress(keyStage, 0), k)
     else
       km.mux(
         indexedKeyType.setFieldMissing(keyStage, 0),
         Code(
           indexedKeyType.setFieldPresent(keyStage, 0),
-          Region.storeIRIntermediate(keyType)(indexedKeyType.fieldOffset(keyStage, 0), k)
+          Region.storeIRIntermediate(keyType)(indexedKeyType.fieldAddress(keyStage, 0), k)
         )),
-    Region.storeLong(indexedKeyType.fieldOffset(keyStage, 1), maxIndex),
+    Region.storeLong(indexedKeyType.fieldAddress(keyStage, 1), maxIndex),
     maxIndex := maxIndex + 1L
   )
 
@@ -345,15 +345,15 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
   private def copyToStaging(value: Code[_], valueM: Code[Boolean], indexedKey: Code[Long]): Code[Unit] = {
     Code(
       staging.ceq(0L).orEmpty(Code._fatal("staging is 0")),
-      Region.copyFrom(indexedKey, eltTuple.fieldOffset(staging, 0), indexedKeyType.byteSize),
+      Region.copyFrom(indexedKey, eltTuple.fieldAddress(staging, 0), indexedKeyType.byteSize),
       if (valueType.required)
-        Region.storeIRIntermediate(valueType)(eltTuple.fieldOffset(staging, 1), value)
+        Region.storeIRIntermediate(valueType)(eltTuple.fieldAddress(staging, 1), value)
       else
         valueM.mux(
           eltTuple.setFieldMissing(staging, 1),
           Code(
             eltTuple.setFieldPresent(staging, 1),
-            Region.storeIRIntermediate(valueType)(eltTuple.fieldOffset(staging, 1), value)
+            Region.storeIRIntermediate(valueType)(eltTuple.fieldAddress(staging, 1), value)
           ))
     )
   }
@@ -419,7 +419,7 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
       i := 0,
       Code.whileLoop(i < other.ab.size,
         offset := other.elementOffset(i),
-        indexOffset := indexedKeyType.fieldOffset(eltTuple.loadField(offset, 0), 1),
+        indexOffset := indexedKeyType.fieldAddress(eltTuple.loadField(offset, 0), 1),
         Region.storeLong(indexOffset, Region.loadLong(indexOffset) + maxIndex),
         (maxSize > 0).orEmpty(
           Code(
@@ -550,7 +550,7 @@ class TakeByRVAS(val valueType: PType, val keyType: PType, val resultType: PArra
       Code.whileLoop(i < ab.size,
         o := elementOffset(indexAt(i)),
         eltTuple.isFieldDefined(o, 1).mux(
-          srvb.addWithDeepCopy(valueType, Region.loadIRIntermediate(valueType)(eltTuple.fieldOffset(o, 1))),
+          srvb.addWithDeepCopy(valueType, Region.loadIRIntermediate(valueType)(eltTuple.fieldAddress(o, 1))),
           srvb.setMissing()
         ),
         srvb.advance(),

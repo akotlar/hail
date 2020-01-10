@@ -85,7 +85,7 @@ abstract class PStruct extends PBaseStruct {
 
   def isFieldMissing(offset: Code[Long], field: String): Code[Boolean]
 
-  def fieldOffset(offset: Code[Long], fieldName: String): Code[Long]
+  def fieldAddress(offset: Code[Long], fieldName: String): Code[Long]
 
   def setFieldPresent(offset: Code[Long], field: String): Code[Unit]
 

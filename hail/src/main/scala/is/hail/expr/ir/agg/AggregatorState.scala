@@ -75,9 +75,9 @@ class TypedRegionBackedAggState(val typ: PType, val fb: EmitFunctionBuilder[_]) 
   def storeNonmissing(v: Code[_]): Code[Unit] = Code(
     region.getNewRegion(regionSize),
     storageType.setFieldPresent(off, 0),
-    StagedRegionValueBuilder.deepCopy(fb, region, typ, v, storageType.fieldOffset(off, 0)))
+    StagedRegionValueBuilder.deepCopy(fb, region, typ, v, storageType.fieldAddress(off, 0)))
 
-  def get(): EmitTriplet = EmitTriplet(Code._empty, storageType.isFieldMissing(off, 0), Region.loadIRIntermediate(typ)(storageType.fieldOffset(off, 0)))
+  def get(): EmitTriplet = EmitTriplet(Code._empty, storageType.isFieldMissing(off, 0), Region.loadIRIntermediate(typ)(storageType.fieldAddress(off, 0)))
 
   def copyFrom(src: Code[Long]): Code[Unit] =
     Code(newState(off), StagedRegionValueBuilder.deepCopy(fb, region, storageType, src, off))
@@ -115,11 +115,11 @@ class PrimitiveRVAState(val types: Array[PType], val fb: EmitFunctionBuilder[_])
   private[this] def loadVarsFromRegion(src: Code[Long]): Code[Unit] =
     foreachField {
       case (i, (None, v, t)) =>
-        v.storeAny(Region.loadPrimitive(t)(storageType.fieldOffset(src, i)))
+        v.storeAny(Region.loadPrimitive(t)(storageType.fieldAddress(src, i)))
       case (i, (Some(m), v, t)) => Code(
         m := storageType.isFieldMissing(src, i),
         m.mux(Code._empty,
-          v.storeAny(Region.loadPrimitive(t)(storageType.fieldOffset(src, i)))))
+          v.storeAny(Region.loadPrimitive(t)(storageType.fieldAddress(src, i)))))
     }
 
   def load(regionLoader: Code[Region] => Code[Unit], src: Code[Long]): Code[Unit] =
@@ -128,11 +128,11 @@ class PrimitiveRVAState(val types: Array[PType], val fb: EmitFunctionBuilder[_])
   def store(regionStorer: Code[Region] => Code[Unit], dest: Code[Long]): Code[Unit] =
       foreachField {
         case (i, (None, v, t)) =>
-          Region.storePrimitive(t, storageType.fieldOffset(dest, i))(v)
+          Region.storePrimitive(t, storageType.fieldAddress(dest, i))(v)
         case (i, (Some(m), v, t)) =>
           m.mux(storageType.setFieldMissing(dest, i),
             Code(storageType.setFieldPresent(dest, i),
-              Region.storePrimitive(t, storageType.fieldOffset(dest, i))(v)))
+              Region.storePrimitive(t, storageType.fieldAddress(dest, i))(v)))
       }
 
   def copyFrom(src: Code[Long]): Code[Unit] = loadVarsFromRegion(src)

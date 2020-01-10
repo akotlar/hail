@@ -15,7 +15,7 @@ class TypedKey(typ: PType, fb: EmitFunctionBuilder[_], region: Code[Region]) ext
   private val kcomp = fb.getCodeOrdering(typ, CodeOrdering.compare, ignoreMissingness = false)
 
   def isKeyMissing(src: Code[Long]): Code[Boolean] = storageType.isFieldMissing(src, 0)
-  def loadKey(src: Code[Long]): Code[_] = Region.loadIRIntermediate(if (inline) typ else PInt64(typ.required))(storageType.fieldOffset(src, 0))
+  def loadKey(src: Code[Long]): Code[_] = Region.loadIRIntermediate(if (inline) typ else PInt64(typ.required))(storageType.fieldAddress(src, 0))
 
   def isEmpty(off: Code[Long]): Code[Boolean] = storageType.isFieldMissing(off, 1)
   def initializeEmpty(off: Code[Long]): Code[Unit] =
@@ -24,9 +24,9 @@ class TypedKey(typ: PType, fb: EmitFunctionBuilder[_], region: Code[Region]) ext
   def store(dest: Code[Long], m: Code[Boolean], v: Code[_]): Code[Unit] = {
     val c = {
       if (typ.isPrimitive)
-        Region.storeIRIntermediate(typ)(storageType.fieldOffset(dest, 0), v)
+        Region.storeIRIntermediate(typ)(storageType.fieldAddress(dest, 0), v)
       else
-        Region.storeAddress(storageType.fieldOffset(dest, 0), StagedRegionValueBuilder.deepCopyFromOffset(fb, region, typ, coerce[Long](v)))
+        Region.storeAddress(storageType.fieldAddress(dest, 0), StagedRegionValueBuilder.deepCopyFromOffset(fb, region, typ, coerce[Long](v)))
     }
     if (!typ.required)
       m.mux(
@@ -76,8 +76,8 @@ class AppendOnlySetState(val fb: EmitFunctionBuilder[_], t: PType) extends Point
 
   override def store(regionStorer: Code[Region] => Code[Unit], dest: Code[Long]): Code[Unit] = {
     Code(
-      Region.storeInt(typ.fieldOffset(off, 0), size),
-      Region.storeAddress(typ.fieldOffset(off, 1), root),
+      Region.storeInt(typ.fieldAddress(off, 0), size),
+      Region.storeAddress(typ.fieldAddress(off, 1), root),
       super.store(regionStorer, dest))
   }
 
