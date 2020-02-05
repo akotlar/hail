@@ -16,14 +16,10 @@ sealed trait IR extends BaseIR {
   private var _pType: PType = null
   private var _typ: Type = null
 
-  def pType = {
-    if (_pType == null)
-      _pType = PType.canonical(typ)
-
-    _pType
-  }
+  def pType = pType2
 
   def pType2 = {
+    println(s"PTYPE 2  ${_pType2}")
     assert(_pType2 != null)
 
     _pType2
@@ -46,12 +42,12 @@ sealed trait IR extends BaseIR {
     Copy(this, newChildren)
 
   override def deepCopy(): this.type = {
-
     val cp = super.deepCopy()
     if (_typ != null)
       cp._typ = _typ
     if (_pType != null)
       cp._pType = _pType
+    cp._pType2 = null
     cp
   }
 

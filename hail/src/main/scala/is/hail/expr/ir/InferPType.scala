@@ -394,7 +394,10 @@ object InferPType {
           theIR._pType2
         })), true)
       case _: AggLet | _: ArrayAgg | _: ArrayAggScan | _: RunAgg | _: RunAggScan | _: NDArrayAgg | _: AggFilter | _: AggExplode |
-           _: AggGroupBy | _: AggArrayPerElement | _: ApplyAggOp | _: ApplyScanOp | _: AggStateValue => PType.canonical(ir.typ)
+           _: AggGroupBy | _: AggArrayPerElement | _: ApplyAggOp | _: ApplyScanOp | _: AggStateValue => {
+        ir.children.foreach(c => infer(c.asInstanceOf[IR]))
+        PType.canonical(ir.typ)
+      }
     }
 
     // Allow only requiredeness to diverge

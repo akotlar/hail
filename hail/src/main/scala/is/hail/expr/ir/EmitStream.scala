@@ -657,6 +657,7 @@ object EmitStream {
               vv := vm.mux(defaultValue(valueType), valuet.v)))
 
         case ArrayMap(childIR, name, bodyIR) =>
+          println(s"DO WE HAVE IT ${streamIR.pType}")
           val childEltType = childIR.pType.asInstanceOf[PStreamable].elementType
           val childEltTI = coerce[Any](typeToTypeInfo(childEltType))
           emitStream(childIR, env).map { eltt =>

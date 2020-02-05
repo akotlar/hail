@@ -1980,9 +1980,12 @@ private class Emit(
     f
   }
 
-  private def emitArrayIterator(ir: IR, env: E, er: EmitRegion, container: Option[AggContainer]): ArrayIteratorTriplet =
-    EmitStream(this, Streamify(ir), env, er, container)
+  private def emitArrayIterator(ir: IR, env: E, er: EmitRegion, container: Option[AggContainer]): ArrayIteratorTriplet = {
+    val s = Streamify(ir)
+    InferPType(if (HasIRSharing(s)) s.deepCopy() else s, Env.empty)
+    EmitStream(this, s, env, er, container)
       .toArrayIterator(mb)
+  }
 
   private def present(x: Code[_]): EmitTriplet =
     EmitTriplet(Code._empty, const(false), x)
