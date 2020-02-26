@@ -250,7 +250,7 @@ object CompileWithAggregators2 {
     ir = LoweringPipeline.compileLowerer.apply(ctx, ir, optimize).asInstanceOf[IR].noSharing
 
     TypeCheck(ir, BindingEnv(Env.fromSeq[Type](args.map { case (name, t, _) => name -> t.virtualType })))
-
+    // InferPType(ir.noSharing, Env(args.map { case (n, pt, _) => n -> pt}: _*), aggSigs, null, null)
     InferPType(ir, Env(args.map { case (n, pt, _) => n -> pt}: _*), aggSigs, null, null)
 
     assert(TypeToIRIntermediateClassTag(ir.typ) == classTag[R])
