@@ -19,12 +19,12 @@ class UnsafeSuite extends HailSuite {
   def subsetType(t: Type): Type = {
     t match {
       case t: TStruct =>
-        TStruct(t.required,
+        TStruct(
           t.fields.filter(_ => Random.nextDouble() < 0.4)
             .map(f => f.name -> f.typ): _*)
 
       case t: TArray =>
-        TArray(subsetType(t.elementType), t.required)
+        TArray(subsetType(t.elementType))
 
       case _ => t
     }
@@ -50,7 +50,7 @@ class UnsafeSuite extends HailSuite {
 
   @DataProvider(name = "codecs")
   def codecs(): Array[Array[Any]] = {
-    (CodecSpec.codecSpecs ++ Array(PackCodecSpec2(PStruct("x" -> PInt64()), CodecSpec.defaultUncompressedBuffer)))
+    (BufferSpec.specs ++ Array(TypedCodecSpec(PStruct("x" -> PInt64()), BufferSpec.default)))
       .map(x => Array[Any](x))
   }
 
@@ -82,8 +82,8 @@ class UnsafeSuite extends HailSuite {
       val a2 = subset(t, requestedType, a)
       assert(requestedType.typeCheck(a2))
 
-      CodecSpec.codecSpecs.foreach { codecSpec =>
-        val codec = codecSpec.makeCodecSpec2(pt)
+      BufferSpec.specs.foreach { bufferSpec =>
+        val codec = TypedCodecSpec(pt, bufferSpec)
         region.clear()
         rvb.start(pt)
         rvb.addRow(t, a.asInstanceOf[Row])
@@ -110,9 +110,9 @@ class UnsafeSuite extends HailSuite {
         assert(requestedType.typeCheck(ur3))
         assert(requestedType.valuesSimilar(a2, ur3))
 
-        val codec2 = codecSpec.makeCodecSpec2(PType.canonical(requestedType))
+        val codec2 = TypedCodecSpec(PType.canonical(requestedType), bufferSpec)
         val aos2 = new ByteArrayOutputStream()
-        val en2 = codec.buildEncoder(pt, prt)(aos2)
+        val en2 = codec2.buildEncoder(pt)(aos2)
         en2.writeRegionValue(region, offset)
         en2.flush()
 
@@ -149,8 +149,8 @@ class UnsafeSuite extends HailSuite {
     valuesAndTypes.foreach { case (v, t) =>
       Region.scoped { region =>
         val off = ScalaToRegionValue(region, t, v)
-        CodecSpec.codecSpecs.foreach { spec =>
-          val cs2 = spec.makeCodecSpec2(t)
+        BufferSpec.specs.foreach { spec =>
+          val cs2 = TypedCodecSpec(t, spec)
           val baos = new ByteArrayOutputStream()
           val enc = cs2.buildEncoder(t)(baos)
           enc.writeRegionValue(region, off)
@@ -161,7 +161,7 @@ class UnsafeSuite extends HailSuite {
           assert(decT == t)
           val res = dec((new ByteArrayInputStream(serialized))).readRegionValue(region)
 
-          assert(t.unsafeOrdering().equiv(RegionValue(region, res), RegionValue(region, off)))
+          assert(t.unsafeOrdering().equiv(res, off))
         }
       }
     }
@@ -170,7 +170,7 @@ class UnsafeSuite extends HailSuite {
   @Test def testBufferWriteReadDoubles() {
     val a = Array(1.0, -349.273, 0.0, 9925.467, 0.001)
 
-    CodecSpec.bufferSpecs.foreach { bufferSpec =>
+    BufferSpec.specs.foreach { bufferSpec =>
       val out = new ByteArrayOutputStream()
       val outputBuffer = bufferSpec.buildOutputBuffer(out)
       outputBuffer.writeDoubles(a)
@@ -283,8 +283,8 @@ class UnsafeSuite extends HailSuite {
 
   @Test def testPacking() {
 
-    def makeStruct(types: PType*): PStruct = {
-      PStruct(types.zipWithIndex.map { case (t, i) => (s"f$i", t) }: _*)
+    def makeStruct(types: PType*): PCanonicalStruct = {
+      PCanonicalStruct(types.zipWithIndex.map { case (t, i) => (s"f$i", t) }: _*)
     }
 
     val t1 = makeStruct( // missing byte is 0
@@ -332,7 +332,7 @@ class UnsafeSuite extends HailSuite {
     val rvb2 = new RegionValueBuilder(region2)
 
     val g = PType.genStruct
-      .flatMap(t => Gen.zip(Gen.const(t), Gen.zip(t.virtualType.genValue, t.virtualType.genValue)))
+      .flatMap(t => Gen.zip(Gen.const(t), Gen.zip(t.genValue, t.genValue)))
       .filter { case (t, (a1, a2)) => a1 != null && a2 != null }
       .resize(10)
     val p = Prop.forAll(g) { case (t, (a1, a2)) =>
@@ -363,7 +363,7 @@ class UnsafeSuite extends HailSuite {
 
       val c1 = ord.compare(a1, a2)
       val c2 = ord.compare(ur1, ur2)
-      val c3 = uord.compare(ur1.region, ur1.offset, ur2.region, ur2.offset)
+      val c3 = uord.compare(ur1.offset, ur2.offset)
 
       val p1 = math.signum(c1) == math.signum(c2)
       val p2 = math.signum(c2) == math.signum(c3)

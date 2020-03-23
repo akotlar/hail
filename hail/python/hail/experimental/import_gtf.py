@@ -6,7 +6,8 @@ from hail.typecheck import *
 from hail.utils.java import info
 
 
-def import_gtf(path, reference_genome=None, skip_invalid_contigs=False, min_partitions=None) -> hl.Table:
+def import_gtf(path, reference_genome=None, skip_invalid_contigs=False, min_partitions=None,
+               force_bgz=False, force=False) -> hl.Table:
     """Import a GTF file.
 
        The GTF file format is identical to the GFF version 2 file format,
@@ -99,6 +100,16 @@ def import_gtf(path, reference_genome=None, skip_invalid_contigs=False, min_part
            ``seqname`` is not consistent with the reference genome.
        min_partitions : :obj:`int` or :obj:`None`
            Minimum number of partitions (passed to import_table).
+       force_bgz : :obj:`bool`
+           If ``True``, load files as blocked gzip files, assuming
+           that they were actually compressed using the BGZ codec. This option is
+           useful when the file extension is not ``'.bgz'``, but the file is
+           blocked gzip, so that the file can be read in parallel and not on a
+           single node.
+       force : :obj:`bool`
+           If ``True``, load gzipped files serially on one core. This should
+           be used only when absolutely necessary, as processing time will be
+           increased due to lack of parallelism.
 
        Returns
        -------
@@ -114,7 +125,9 @@ def import_gtf(path, reference_genome=None, skip_invalid_contigs=False, min_part
                                 'f5': hl.tfloat,
                                 'f7': hl.tint},
                          missing='.',
-                         delimiter='\t')
+                         delimiter='\t',
+                         force_bgz=force_bgz,
+                         force=force)
 
     ht = ht.rename({'f0': 'seqname',
                     'f1': 'source',
@@ -205,24 +218,9 @@ def get_gene_intervals(gene_symbols=None, gene_ids=None, transcript_ids=None,
     -------
     :obj:`list` of :class:`.Interval`
     """
-    GTFS = {
-        'GRCh37': 'gs://hail-common/references/gencode/gencode.v19.annotation.gtf.bgz',
-        'GRCh38': 'gs://hail-common/references/gencode/gencode.v29.annotation.gtf.bgz',
-    }
-    if reference_genome is None:
-        reference_genome = hl.default_reference().name
-    else:
-        reference_genome = reference_genome.name
-    if gtf_file is None:
-        gtf_file = GTFS.get(reference_genome)
-        if gtf_file is None:
-            raise ValueError('get_gene_intervals requires a GTF file, or the reference genome be one of GRCh37 or GRCh38 (when on Google Cloud Platform)')
     if gene_symbols is None and gene_ids is None and transcript_ids is None:
         raise ValueError('get_gene_intervals requires at least one of gene_symbols, gene_ids, or transcript_ids')
-    ht = hl.experimental.import_gtf(gtf_file, reference_genome=reference_genome,
-                                    skip_invalid_contigs=True, min_partitions=12)
-    ht = ht.annotate(gene_id=ht.gene_id.split(f'\\.')[0],
-                     transcript_id=ht.transcript_id.split('\\.')[0])
+    ht = _load_gencode_gtf(gtf_file, reference_genome)
     criteria = []
     if gene_symbols:
         criteria.append(hl.any(lambda y: (ht.feature == 'gene') & (ht.gene_name == y), gene_symbols))
@@ -238,3 +236,39 @@ def get_gene_intervals(gene_symbols=None, gene_ids=None, transcript_ids=None,
              "\n".join(map(lambda x: f'{x[0]}: {x[1]} ({x[2] if x[0] == "gene" else x[3]})', gene_info)))
     intervals = list(map(lambda x: x[-1], gene_info))
     return intervals
+
+
+def _load_gencode_gtf(gtf_file=None, reference_genome=None):
+    """
+    Get Gencode GTF (from file or reference genome)
+
+    Parameters
+    ----------
+    reference_genome : :obj:`str` or :class:`.ReferenceGenome`, optional
+       Reference genome to use (passed along to import_gtf).
+    gtf_file : :obj:`str`
+       GTF file to load. If none is provided, but `reference_genome` is one of
+       `GRCh37` or `GRCh38`, a default will be used (on Google Cloud Platform).
+
+    Returns
+    -------
+    :class:`.Table`
+    """
+    GTFS = {
+        'GRCh37': 'gs://hail-common/references/gencode/gencode.v19.annotation.gtf.bgz',
+        'GRCh38': 'gs://hail-common/references/gencode/gencode.v29.annotation.gtf.bgz',
+    }
+    if reference_genome is None:
+        reference_genome = hl.default_reference().name
+    else:
+        reference_genome = reference_genome.name
+    if gtf_file is None:
+        gtf_file = GTFS.get(reference_genome)
+        if gtf_file is None:
+            raise ValueError(
+                'get_gene_intervals requires a GTF file, or the reference genome be one of GRCh37 or GRCh38 (when on Google Cloud Platform)')
+    ht = hl.experimental.import_gtf(gtf_file, reference_genome=reference_genome,
+                                    skip_invalid_contigs=True, min_partitions=12)
+    ht = ht.annotate(gene_id=ht.gene_id.split(f'\\.')[0],
+                     transcript_id=ht.transcript_id.split('\\.')[0])
+    return ht

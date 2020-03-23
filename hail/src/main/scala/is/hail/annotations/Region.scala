@@ -33,6 +33,10 @@ object Region {
 
   def loadByte(addr: Long): Byte = Memory.loadByte(addr)
 
+  def loadShort(addr: Long): Short = Memory.loadShort(addr)
+
+  def loadChar(addr: Long): Char = Memory.loadShort(addr).toChar
+
   def storeInt(addr: Long, v: Int): Unit = Memory.storeInt(addr, v)
 
   def storeLong(addr: Long, v: Long): Unit = Memory.storeLong(addr, v)
@@ -44,6 +48,10 @@ object Region {
   def storeAddress(addr: Long, v: Long): Unit = Memory.storeAddress(addr, v)
 
   def storeByte(addr: Long, v: Byte): Unit = Memory.storeByte(addr, v)
+
+  def storeShort(addr: Long, s: Short): Unit = Memory.storeShort(addr, s)
+
+  def storeChar(addr: Long, c: Char): Unit = Memory.storeShort(addr, c.toShort)
 
   def loadBoolean(addr: Long): Boolean = if (Memory.loadByte(addr) == 0) false else true
 
@@ -112,6 +120,10 @@ object Region {
 
   def loadByte(addr: Code[Long]): Code[Byte] = Code.invokeScalaObject[Long, Byte](Region.getClass, "loadByte", addr)
 
+  def loadShort(addr: Code[Long]): Code[Short] = Code.invokeScalaObject[Long, Short](Region.getClass, "loadShort", addr)
+
+  def loadChar(addr: Code[Long]): Code[Char] = Code.invokeScalaObject[Long, Char](Region.getClass, "loadChar", addr)
+
   def storeInt(addr: Code[Long], v: Code[Int]): Code[Unit] = Code.invokeScalaObject[Long, Int, Unit](Region.getClass, "storeInt", addr, v)
 
   def storeLong(addr: Code[Long], v: Code[Long]): Code[Unit] = Code.invokeScalaObject[Long, Long, Unit](Region.getClass, "storeLong", addr, v)
@@ -120,9 +132,13 @@ object Region {
 
   def storeDouble(addr: Code[Long], v: Code[Double]): Code[Unit] = Code.invokeScalaObject[Long, Double, Unit](Region.getClass, "storeDouble", addr, v)
 
+  def storeChar(addr: Code[Long], v: Code[Char]): Code[Unit] = Code.invokeScalaObject[Long, Char, Unit](Region.getClass, "storeChar", addr, v)
+
   def storeAddress(addr: Code[Long], v: Code[Long]): Code[Unit] = Code.invokeScalaObject[Long, Long, Unit](Region.getClass, "storeAddress", addr, v)
 
   def storeByte(addr: Code[Long], v: Code[Byte]): Code[Unit] = Code.invokeScalaObject[Long, Byte, Unit](Region.getClass, "storeByte", addr, v)
+
+  def storeShort(addr: Code[Long], v: Code[Short]): Code[Unit] = Code.invokeScalaObject[Long, Short, Unit](Region.getClass, "storeShort", addr, v)
 
   def loadBoolean(addr: Code[Long]): Code[Boolean] = Code.invokeScalaObject[Long, Boolean](Region.getClass, "loadBoolean", addr)
 
@@ -130,7 +146,7 @@ object Region {
 
   def loadBytes(addr: Code[Long], n: Code[Int]): Code[Array[Byte]] = Code.invokeScalaObject[Long, Int, Array[Byte]](Region.getClass, "loadBytes", addr, n)
 
-  def loadBytes(addr: Code[Long], dst: Code[Array[Byte]], dstOff: Code[Long], n: Code[Long]): Unit =
+  def loadBytes(addr: Code[Long], dst: Code[Array[Byte]], dstOff: Code[Long], n: Code[Long]): Code[Unit] =
     Code.invokeScalaObject[Long, Array[Byte], Long, Long, Unit](Region.getClass, "loadBytes", addr, dst, dstOff, n)
 
   def storeBytes(addr: Code[Long], src: Code[Array[Byte]]): Code[Unit] = Code.invokeScalaObject[Long, Array[Byte], Unit](Region.getClass, "storeBytes", addr, src)
@@ -155,6 +171,52 @@ object Region {
 
   def setMemory(offset: Code[Long], size: Code[Long], b: Code[Byte]): Code[Unit] =
     Code.invokeScalaObject[Long, Long, Byte, Unit](Region.getClass, "setMemory", offset, size, b)
+
+  def containsNonZeroBits(address: Code[Long], nBits: Code[Long]): Code[Boolean] =
+    Code.invokeScalaObject[Long, Long, Boolean](Region.getClass, "containsNonZeroBits", address, nBits)
+
+  def containsNonZeroBits(address: Long, nBits: Long): Boolean = {
+    assert((address & 0x3) == 0)
+
+    var bitsRead: Long = 0
+
+    if ((address & 0x7) != 0 && nBits >= 32) {
+      if (loadInt(address) != 0)
+        return true
+
+      bitsRead += 32
+    }
+
+    while (nBits - bitsRead >= 64) {
+      if (loadLong(address + bitsRead/8) != 0)
+        return true
+
+      bitsRead += 64
+    }
+
+    while (nBits - bitsRead >= 32) {
+      if (loadInt(address + bitsRead/8) != 0)
+        return true
+
+      bitsRead += 32
+    }
+
+    while (nBits - bitsRead >= 8) {
+      if (loadByte(address + bitsRead/8) != 0)
+        return true
+
+      bitsRead += 8
+    }
+
+    while (bitsRead < nBits) {
+      if (loadBit(address, bitsRead))
+        return true
+
+      bitsRead += 1
+    }
+
+    false
+  }
 
   def loadPrimitive(typ: PType): Code[Long] => Code[_] = typ.fundamentalType match {
     case _: PBoolean => loadBoolean
@@ -209,6 +271,71 @@ object Region {
   def apply(blockSize: Region.Size = Region.REGULAR, pool: RegionPool = null): Region = {
     (if (pool == null) RegionPool.get else pool)
       .getRegion(blockSize)
+  }
+
+  def pretty(t: PType, off: Long): String = {
+    val v = new PrettyVisitor()
+    visit(t, off, v)
+    v.result()
+  }
+
+  def visit(t: PType, off: Long, v: ValueVisitor) {
+    t match {
+      case _: PBoolean => v.visitBoolean(Region.loadBoolean(off))
+      case _: PInt32 => v.visitInt32(Region.loadInt(off))
+      case _: PInt64 => v.visitInt64(Region.loadLong(off))
+      case _: PFloat32 => v.visitFloat32(Region.loadFloat(off))
+      case _: PFloat64 => v.visitFloat64(Region.loadDouble(off))
+      case t: PString =>
+        v.visitString(t.loadString(off))
+      case t: PBinary =>
+        val b = t.loadBytes(off)
+        v.visitBinary(b)
+      case t: PContainer =>
+        val aoff = off
+        val pt = t
+        val length = pt.loadLength(aoff)
+        v.enterArray(t, length)
+        var i = 0
+        while (i < length) {
+          v.enterElement(i)
+          if (pt.isElementDefined(aoff, i))
+            visit(t.elementType, pt.loadElement(aoff, length, i), v)
+          else
+            v.visitMissing(t.elementType)
+          i += 1
+        }
+        v.leaveArray()
+      case t: PStruct =>
+        v.enterStruct(t)
+        var i = 0
+        while (i < t.size) {
+          val f = t.fields(i)
+          v.enterField(f)
+          if (t.isFieldDefined(off, i))
+            visit(f.typ, t.loadField(off, i), v)
+          else
+            v.visitMissing(f.typ)
+          v.leaveField()
+          i += 1
+        }
+        v.leaveStruct()
+      case t: PTuple =>
+        v.enterTuple(t)
+        var i = 0
+        while (i < t.size) {
+          v.enterElement(i)
+          if (t.isFieldDefined(off, i))
+            visit(t.types(i), t.loadField(off, i), v)
+          else
+            v.visitMissing(t.types(i))
+          v.leaveElement()
+          i += 1
+        }
+        v.leaveTuple()
+      case t: ComplexPType =>
+        visit(t.representation, off, v)
+    }
   }
 }
 
@@ -283,165 +410,9 @@ final class Region protected[annotations](var blockSize: Region.Size, var pool: 
     memory.releaseReferenceAtIndex(idx)
   }
 
-  def appendBinary(v: Array[Byte]): Long = {
-    val len: Int = v.length
-    val grain = if (PBinary.contentAlignment < 4) 4 else PBinary.contentAlignment
-    val addr = allocate(grain, grain + len) + (grain - 4)
-    Region.storeInt(addr, len)
-    Region.storeBytes(addr + 4, v)
-    addr
-  }
+  def storeJavaObject(obj: AnyRef): Int = memory.storeJavaObject(obj)
 
-  def loadInt(addr: Long): Int = Region.loadInt(addr)
-
-  def loadLong(addr: Long): Long = Region.loadLong(addr)
-
-  def loadFloat(addr: Long): Float = Region.loadFloat(addr)
-
-  def loadDouble(addr: Long): Double = Region.loadDouble(addr)
-
-  def loadAddress(addr: Long): Long = Region.loadLong(addr)
-
-  def loadByte(addr: Long): Byte = Region.loadByte(addr)
-
-  def storeInt(addr: Long, v: Int): Unit = Region.storeInt(addr, v)
-
-  def storeLong(addr: Long, v: Long): Unit = Region.storeLong(addr, v)
-
-  def storeFloat(addr: Long, v: Float): Unit = Region.storeFloat(addr, v)
-
-  def storeDouble(addr: Long, v: Double): Unit = Region.storeDouble(addr, v)
-
-  def storeAddress(addr: Long, v: Long): Unit = Region.storeAddress(addr, v)
-
-  def storeByte(addr: Long, v: Byte): Unit = Region.storeByte(addr, v)
-
-  def loadBoolean(addr: Long): Boolean = Region.loadBoolean(addr)
-
-  def storeBoolean(addr: Long, v: Boolean): Unit = Region.storeBoolean(addr, v)
-
-  def loadBytes(addr: Long, n: Int): Array[Byte] = Region.loadBytes(addr, n)
-
-  def loadBytes(addr: Long, dst: Array[Byte], dstOff: Long, n: Long): Unit =
-    Region.loadBytes(addr, dst, dstOff, n)
-
-  def storeBytes(addr: Long, src: Array[Byte]): Unit = Region.storeBytes(addr, src)
-
-  def storeBytes(addr: Long, src: Array[Byte], srcOff: Long, n: Long): Unit =
-    Region.storeBytes(addr, src, srcOff, n)
-
-  def copyFrom(src: Region, srcOff: Long, dstOff: Long, n: Long) =
-    Region.copyFrom(srcOff, dstOff, n)
-
-  def loadBit(byteOff: Long, bitOff: Long): Boolean = Region.loadBit(byteOff, bitOff)
-
-  def setBit(byteOff: Long, bitOff: Long): Unit = Region.setBit(byteOff, bitOff)
-
-  def clearBit(byteOff: Long, bitOff: Long): Unit = Region.clearBit(byteOff, bitOff)
-
-  def storeBit(byteOff: Long, bitOff: Long, b: Boolean): Unit = Region.storeBit(byteOff, bitOff, b)
-
-  // Use of appendXXX methods is deprecated now that Region uses absolute
-  // addresses and non-contiguous memory allocation.  You can't assume any
-  // relationships between the addresses returned by appendXXX methods -
-  // and to make it even more confusing, there may be long sequences of
-  // ascending addresses (within a buffer) followed by an arbitrary jump
-  // to an address in a different buffer.
-
-  def appendInt(v: Int): Long = {
-    val a = allocate(4, 4)
-    Memory.storeInt(a, v)
-    a
-  }
-
-  def appendLong(v: Long): Long = {
-    val a = allocate(8, 8)
-    Memory.storeLong(a, v)
-    a
-  }
-
-  def appendDouble(v: Double): Long = {
-    val a = allocate(8, 8)
-    Memory.storeDouble(a, v)
-    a
-  }
-
-  def appendByte(v: Byte): Long = {
-    val a = allocate(1)
-    Memory.storeByte(a, v)
-    a
-  }
-
-  def appendString(v: String): Long =
-    appendBinary(v.getBytes)
-
-  def visit(t: PType, off: Long, v: ValueVisitor) {
-    t match {
-      case _: PBoolean => v.visitBoolean(loadBoolean(off))
-      case _: PInt32 => v.visitInt32(loadInt(off))
-      case _: PInt64 => v.visitInt64(loadLong(off))
-      case _: PFloat32 => v.visitFloat32(loadFloat(off))
-      case _: PFloat64 => v.visitFloat64(loadDouble(off))
-      case _: PString =>
-        val boff = off
-        v.visitString(PString.loadString(this, boff))
-      case _: PBinary =>
-        val boff = off
-        val length = PBinary.loadLength(this, boff)
-        val b = loadBytes(PBinary.bytesOffset(boff), length)
-        v.visitBinary(b)
-      case t: PContainer =>
-        val aoff = off
-        val pt = t
-        val length = pt.loadLength(this, aoff)
-        v.enterArray(t, length)
-        var i = 0
-        while (i < length) {
-          v.enterElement(i)
-          if (pt.isElementDefined(this, aoff, i))
-            visit(t.elementType, pt.loadElement(this, aoff, length, i), v)
-          else
-            v.visitMissing(t.elementType)
-          i += 1
-        }
-        v.leaveArray()
-      case t: PStruct =>
-        v.enterStruct(t)
-        var i = 0
-        while (i < t.size) {
-          val f = t.fields(i)
-          v.enterField(f)
-          if (t.isFieldDefined(this, off, i))
-            visit(f.typ, t.loadField(this, off, i), v)
-          else
-            v.visitMissing(f.typ)
-          v.leaveField()
-          i += 1
-        }
-        v.leaveStruct()
-      case t: PTuple =>
-        v.enterTuple(t)
-        var i = 0
-        while (i < t.size) {
-          v.enterElement(i)
-          if (t.isFieldDefined(this, off, i))
-            visit(t.types(i), t.loadField(this, off, i), v)
-          else
-            v.visitMissing(t.types(i))
-          v.leaveElement()
-          i += 1
-        }
-        v.leaveTuple()
-      case t: ComplexPType =>
-        visit(t.representation, off, v)
-    }
-  }
-
-  def pretty(t: PType, off: Long): String = {
-    val v = new PrettyVisitor()
-    visit(t, off, v)
-    v.result()
-  }
+  def lookupJavaObject(idx: Int): AnyRef = memory.lookupJavaObject(idx)
 
   def prettyBits(): String = {
     "FIXME: implement prettyBits on Region"
@@ -449,12 +420,14 @@ final class Region protected[annotations](var blockSize: Region.Size, var pool: 
 }
 
 object RegionUtils {
-  def printBytes(off: Long, n: Int, header: String): String = {
+  def printAddr(off: Long, name: String): String = s"$name: ${"%016x".format(off)}"
+  def printAddr(off: Code[Long], name: String): Code[String] = Code.invokeScalaObject[Long, String, String](RegionUtils.getClass, "printAddr", off, name)
+
+  def printBytes(off: Long, n: Int, header: String): String =
     Region.loadBytes(off, n).zipWithIndex
       .grouped(16)
       .map(bs => bs.map { case (b, _) => "%02x".format(b) }.mkString("  %016x: ".format(off + bs(0)._2), " ", ""))
       .mkString(if (header != null) s"$header\n" else "\n", "\n", "")
-  }
 
   def printBytes(off: Code[Long], n: Int, header: String): Code[String] =
     Code.invokeScalaObject[Long, Int, String, String](RegionUtils.getClass, "printBytes", off, n, asm4s.const(header))

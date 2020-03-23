@@ -4,14 +4,12 @@ import java.io._
 
 import is.hail.annotations._
 import is.hail.expr.types.physical._
-import is.hail.expr.types.virtual._
 import is.hail.io.fs.FS
 import is.hail.io.index.IndexWriter
-import is.hail.rvd.{AbstractRVDSpec, IndexSpec, IndexedRVDSpec, OrderedRVDSpec, RVDContext, RVDPartitioner, RVDType}
+import is.hail.rvd.{IndexSpec, MakeRVDSpec, RVDContext, RVDPartitioner, RVDType}
 import is.hail.sparkextras._
 import is.hail.utils._
 import is.hail.utils.richUtils.ByteTrackingOutputStream
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.{ExposedMetrics, TaskContext}
@@ -152,26 +150,27 @@ object RichContextRDDRegionValue {
   def writeSplitSpecs(
     fs: FS,
     path: String,
-    codecSpec: CodecSpec,
+    rowsCodecSpec: AbstractTypedCodecSpec,
+    entriesCodecSpec: AbstractTypedCodecSpec,
     t: RVDType,
     rowsRVType: PStruct,
     entriesRVType: PStruct,
     partFiles: Array[String],
     partitioner: RVDPartitioner
   ) {
-    val rowsSpec = IndexedRVDSpec(
-      rowsRVType, t.key, codecSpec, IndexSpec.defaultAnnotation("../../index", t.kType.virtualType), partFiles, partitioner)
+    val rowsSpec = MakeRVDSpec(
+      t.key, rowsCodecSpec, partFiles, partitioner, IndexSpec.defaultAnnotation("../../index", t.kType))
     rowsSpec.write(fs, path + "/rows/rows")
 
-    val entriesSpec = IndexedRVDSpec(entriesRVType, FastIndexedSeq(), codecSpec,
-      IndexSpec.defaultAnnotation("../../index", t.kType.virtualType, withOffsetField = true), partFiles,
-      RVDPartitioner.unkeyed(partitioner.numPartitions))
+    val entriesSpec = MakeRVDSpec(
+      FastIndexedSeq(), entriesCodecSpec, partFiles, RVDPartitioner.unkeyed(partitioner.numPartitions),
+      IndexSpec.defaultAnnotation("../../index", t.kType, withOffsetField = true))
     entriesSpec.write(fs, path + "/entries/rows")
   }
 }
 
-class RichContextRDDRegionValue(val crdd: ContextRDD[RVDContext, RegionValue]) extends AnyVal {
-  def boundary: ContextRDD[RVDContext, RegionValue] =
+class RichContextRDDRegionValue(val crdd: ContextRDD[RegionValue]) extends AnyVal {
+  def boundary: ContextRDD[RegionValue] =
     crdd.cmapPartitionsAndContext { (consumerCtx, part) =>
       val producerCtx = consumerCtx.freshContext
       val it = part.flatMap(_ (producerCtx))
@@ -201,7 +200,7 @@ class RichContextRDDRegionValue(val crdd: ContextRDD[RVDContext, RegionValue]) e
     idxRelPath: String,
     t: RVDType,
     stageLocally: Boolean,
-    encoding: CodecSpec2
+    encoding: AbstractTypedCodecSpec
   ): (Array[String], Array[Long]) = {
     crdd.writePartitions(
       path,
@@ -209,12 +208,12 @@ class RichContextRDDRegionValue(val crdd: ContextRDD[RVDContext, RegionValue]) e
       stageLocally,
       IndexWriter.builder(t.kType, +PStruct()),
       RichContextRDDRegionValue.writeRowsPartition(
-        encoding.buildEncoder(t.rowType, t.rowType),
+        encoding.buildEncoder(t.rowType),
         t.kFieldIdx,
         t.rowType))
   }
 
   def toRows(rowType: PStruct): RDD[Row] = {
-    crdd.run.map(rv => SafeRow(rowType, rv.region, rv.offset))
+    crdd.run.map(rv => SafeRow(rowType, rv.offset))
   }
 }

@@ -49,16 +49,6 @@ case class OrderedRVIterator(
         .compare
     )
 
-  def innerJoinDistinct(other: OrderedRVIterator): Iterator[JoinedRegionValue] =
-    iterator.toFlipbookIterator.innerJoinDistinct(
-      other.iterator.toFlipbookIterator,
-      this.t.kRowOrdView(ctx.freshRegion),
-      other.t.kRowOrdView(ctx.freshRegion),
-      null,
-      null,
-      this.t.joinComp(other.t).compare
-    )
-
   def leftJoinDistinct(other: OrderedRVIterator): Iterator[JoinedRegionValue] =
     iterator.toFlipbookIterator.leftJoinDistinct(
       other.iterator.toFlipbookIterator,
@@ -85,7 +75,7 @@ case class OrderedRVIterator(
       other.t.kFieldIdx,
       Array(other.t.kType.types(0).asInstanceOf[PInterval].endPrimaryUnsafeOrdering()),
       missingEqual = true
-    ).reverse
+    ).toRVOrdering.reverse
     val mixedOrd: (RegionValue, RegionValue) => Int = this.t.intervalJoinComp(other.t).compare
 
     val sm = new StateMachine[Muple[RegionValue, Iterable[RegionValue]]] {
@@ -201,7 +191,7 @@ case class OrderedRVIterator(
       private val bit = iterator.buffered
 
       private val q = new mutable.PriorityQueue[RegionValue]()(
-        t.copy(key = newKey).kInRowOrd.reverse)
+        t.copy(key = newKey).kInRowOrd.toRVOrdering.reverse)
 
       private val rvb = new RegionValueBuilder(consumerRegion)
       private val rv = RegionValue()

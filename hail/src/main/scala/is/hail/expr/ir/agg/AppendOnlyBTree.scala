@@ -18,18 +18,22 @@ trait BTreeKey {
   def deepCopy(er: EmitRegion, src: Code[Long], dest: Code[Long]): Code[Unit]
 
   def compKeys(k1: (Code[Boolean], Code[_]), k2: (Code[Boolean], Code[_])): Code[Int]
-  def loadCompKey(off: Code[Long]): (Code[Boolean], Code[_])
+  def loadCompKey(off: Value[Long]): (Code[Boolean], Code[_])
 
   def compSame(off: Code[Long], other: Code[Long]): Code[Int] =
-    compKeys(loadCompKey(off), loadCompKey(other))
+    Code.memoize(off, "btk_comp_same_off", other, "btk_comp_same_other") { (off, other) =>
+      compKeys(loadCompKey(off), loadCompKey(other))
+    }
   def compWithKey(off: Code[Long], k: (Code[Boolean], Code[_])): Code[Int] =
-    compKeys(loadCompKey(off), k)
+    Code.memoize(off, "btk_comp_with_key_off") { off =>
+      compKeys(loadCompKey(off), k)
+    }
 }
 
-class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Region], root: ClassFieldRef[Long], maxElements: Int = 2) {
+class AppendOnlyBTree(cb: EmitClassBuilder[_], key: BTreeKey, region: Value[Region], root: Settable[Long], maxElements: Int = 2) {
   private val splitIdx = maxElements / 2
   private val eltType: PTuple = PTuple(key.storageType, PInt64(true))
-  private val elementsType: PTuple = PTuple(required = true, Array.fill(maxElements)(eltType): _*)
+  private val elementsType: PTuple = PCanonicalTuple(required = true, Array.fill[PType](maxElements)(eltType): _*)
   private val storageType: PStruct = PStruct(required = true,
     "parent" -> PInt64(),
     "child0" -> PInt64(),
@@ -37,8 +41,8 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
 
   private def createNode(nodeBucket: Settable[Long]): Code[Unit] = Code(
     nodeBucket := region.allocate(storageType.alignment, storageType.byteSize),
-    storageType.setAllMissing(nodeBucket),
-    elementsType.setAllMissing(elements(nodeBucket)))
+    storageType.stagedInitialize(nodeBucket, true),
+    elementsType.stagedInitialize(elements(nodeBucket), true))
 
   private def isRoot(node: Code[Long]): Code[Boolean] = storageType.isFieldMissing(node, 0)
   private def isLeaf(node: Code[Long]): Code[Boolean] = storageType.isFieldMissing(node, 1)
@@ -60,22 +64,26 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
   private def loadChild(node: Code[Long], i: Int): Code[Long] =
     Region.loadAddress(childOffset(node, i))
   private def setChild(parent: Code[Long], i: Int, child: Code[Long]): Code[Unit] =
-    Code(
-      if (i == -1) storageType.setFieldPresent(parent, 1) else Code._empty,
-      Region.storeAddress(childOffset(parent, i), child),
-      storageType.setFieldPresent(child, 0),
-      Region.storeAddress(storageType.fieldOffset(child, 0), parent))
+    Code.memoize(parent, "aobt_set_child_parent",
+      child, "aobt_set_child_child") { (parent, child) =>
+      Code(
+        if (i == -1) storageType.setFieldPresent(parent, 1) else Code._empty,
+        Region.storeAddress(childOffset(parent, i), child),
+        storageType.setFieldPresent(child, 0),
+        Region.storeAddress(storageType.fieldOffset(child, 0), parent))
+    }
 
-  private val insert: EmitMethodBuilder = {
-    val insertAt = fb.newMethod("insert", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Int], typeInfo[Boolean], typeToTypeInfo(key.compType), typeInfo[Long]), typeInfo[Long])
-    val node: Code[Long] = insertAt.getArg[Long](1)
-    val insertIdx: Code[Int] = insertAt.getArg[Int](2)
-    val km: Code[Boolean] = insertAt.getArg[Boolean](3)
-    val kv: Code[_] = insertAt.getArg(4)(typeToTypeInfo(key.compType))
-    val child: Code[Long] = insertAt.getArg[Long](5)
-    val parent = getParent(node)
+  private val insert: EmitMethodBuilder[_] = {
+    val insertAt = cb.genEmitMethod("btree_insert", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Int], typeInfo[Boolean], typeToTypeInfo(key.compType), typeInfo[Long]), typeInfo[Long])
+    val node: Value[Long] = insertAt.getArg[Long](1)
+    val insertIdx: Value[Int] = insertAt.getArg[Int](2)
+    val km: Value[Boolean] = insertAt.getArg[Boolean](3)
+    val kv: Value[_] = insertAt.getArg(4)(typeToTypeInfo(key.compType))
+    val child: Value[Long] = insertAt.getArg[Long](5)
 
-    val newNode = insertAt.newLocal[Long]
+    def parent: Code[Long] = getParent(node)
+
+    val newNode = insertAt.newLocal[Long]()
 
     def makeUninitialized(idx: Int): Code[Long] =
       Code(
@@ -85,10 +93,13 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
         loadKey(node, idx))
 
     def copyFrom(destNode: Code[Long], destIdx: Int, srcNode: Code[Long], srcIdx: Int): Code[Unit] =
-      Code(
-        setKeyPresent(destNode, destIdx),
-        key.copy(keyOffset(srcNode, srcIdx), keyOffset(destNode, destIdx)),
-        (!isLeaf(srcNode)).orEmpty(setChild(destNode, destIdx, loadChild(srcNode, srcIdx))))
+      Code.memoize(destNode, "aobt_copy_from_destnode",
+        srcNode, "aobt_copy_from_srcnode") { (destNode, srcNode) =>
+        Code(
+          setKeyPresent(destNode, destIdx),
+          key.copy(keyOffset(srcNode, srcIdx), keyOffset(destNode, destIdx)),
+          (!isLeaf(srcNode)).orEmpty(setChild(destNode, destIdx, loadChild(srcNode, srcIdx))))
+      }
 
     val shiftAndInsert = Array.range(1, maxElements)
       .foldLeft(makeUninitialized(0)) { (cont, destIdx) =>
@@ -100,17 +111,17 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
             cont))
       }
 
-    def copyToNew(startIdx: Int) = coerce[Unit](Code(
+    def copyToNew(startIdx: Int) = Code(
       Array.tabulate(maxElements - startIdx) { newIdx =>
         Code(copyFrom(newNode, newIdx, node, newIdx + startIdx),
           setKeyMissing(node, newIdx + startIdx))
-      }: _*))
+      })
 
-    def insertKey(m: Code[Boolean], v: Code[_], c: Code[Long]): Code[Long] = {
+    def insertKey(m: Value[Boolean], v: Value[_], c: Code[Long]): Code[Long] = {
       val upperBound = Array.range(0, maxElements)
-        .foldRight(const(maxElements)) { (i, cont) =>
+        .foldRight(maxElements: Code[Int]) { (i, cont) =>
           (!hasKey(parent, i) ||
-            key.compWithKey(loadKey(parent, i), m -> v) >= 0)
+            key.compWithKey(loadKey(parent, i), m.get -> v.get) >= 0)
             .mux(i, cont)
         }
       Code((!isLeaf(node)).orEmpty(
@@ -118,19 +129,21 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
         insertAt.invoke[Long](parent, upperBound, m, v, newNode))
     }
 
-    def promote(idx: Int) = {
+    def promote(idx: Int): Code[Unit] = {
       val upperBound = Array.range(0, maxElements)
-        .foldRight(const(maxElements)) { (i, cont) =>
+        .foldRight(maxElements: Code[Int]) { (i, cont) =>
           (!hasKey(parent, i) ||
             key.compSame(loadKey(parent, i), loadKey(node, idx)) >= 0)
             .mux(i, cont)
         }
-      val (compKeyM, compKeyV) = key.loadCompKey(loadKey(node, idx))
-      Code((!isLeaf(node)).orEmpty(
-        setChild(newNode, -1, loadChild(node, idx))),
-        key.copy(loadKey(node, idx),
-          insertAt.invoke[Long](parent, upperBound, compKeyM, compKeyV, newNode)),
-        setKeyMissing(node, idx))
+      Code.memoize(loadKey(node, idx), "aobt_insert_nikey") { nikey =>
+        val (compKeyM, compKeyV) = key.loadCompKey(nikey)
+        Code((!isLeaf(node)).orEmpty(
+          setChild(newNode, -1, loadChild(node, idx))),
+          key.copy(loadKey(node, idx),
+            insertAt.invoke[Long](parent, upperBound, compKeyM, compKeyV, newNode)),
+          setKeyMissing(node, idx))
+      }
     }
 
     val splitAndInsert = Code(
@@ -153,27 +166,32 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
     insertAt
   }
 
-  private val getF: EmitMethodBuilder = {
-    val get = fb.newMethod("get", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Boolean], typeToTypeInfo(key.compType)), typeInfo[Long])
-    val node = get.getArg[Long](1).load()
-    val km = get.getArg[Boolean](2).load()
-    val kv = get.getArg(3)(typeToTypeInfo(key.compType)).load()
+  private val getF: EmitMethodBuilder[_] = {
+    val get = cb.genEmitMethod("btree_get", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Boolean], typeToTypeInfo(key.compType)), typeInfo[Long])
+    val node = get.getArg[Long](1)
+    val km = get.getArg[Boolean](2)
+    val kv = get.getArg(3)(typeToTypeInfo(key.compType))
 
-    val cmp = get.newLocal[Int]
-    def eltEqual(i: Int) = hasKey(node, i) && cmp.ceq(0)
+    val cmp = get.newLocal[Int]()
+    val keyV = get.newLocal[Long]()
+
     def insertOrGetAt(i: Int) = isLeaf(node).mux(
-        insert.invoke[Long](node, i, km, kv, 0L),
-      get.invoke(loadChild(node, i - 1), km, kv))
+      Code(keyV := insert.invoke[Long](node, i, km, kv, 0L), cmp := 0),
+      node := loadChild(node, i - 1))
 
     get.emit(Code(
-      cmp := 0,
-      Array.range(0, maxElements).foldRight(insertOrGetAt(maxElements)) { (i, cont) =>
-        val storeCmp = cmp := key.compWithKey(loadKey(node, i), km -> kv)
-        (!hasKey(node, i) || Code(storeCmp, cmp >= 0)).mux(
-          eltEqual(i).mux(loadKey(node, i),
-            insertOrGetAt(i)),
-          cont)
-      }))
+      cmp := -1,
+      keyV := 0L,
+      Code.whileLoop(cmp.cne(0),
+        Array.range(0, maxElements).foldRight(insertOrGetAt(maxElements)) { (i, cont) =>
+          val storeKeyAndComp = Code(
+            keyV := loadKey(node, i),
+            cmp := key.compWithKey(keyV, km.get -> kv.get))
+          (hasKey(node, i) && Code(storeKeyAndComp, cmp <= 0)).mux(
+            (cmp < 0).orEmpty(cont),
+            insertOrGetAt(i))
+        }),
+      keyV))
     get
   }
 
@@ -183,13 +201,15 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
     getF.invoke(root, km, kv)
 
   def foreach(visitor: Code[Long] => Code[Unit]): Code[Unit] = {
-    val f = fb.newMethod("foreach", Array[TypeInfo[_]](typeInfo[Long]), typeInfo[Unit])
+    val f = cb.genEmitMethod("btree_foreach", Array[TypeInfo[_]](typeInfo[Long]), typeInfo[Unit])
     val node = f.getArg[Long](1)
+    val i = f.newLocal[Int]("aobt_foreach_i")
 
     f.emit(Code(
       (!isLeaf(node)).orEmpty(f.invoke(loadChild(node, -1))),
+      i := 0,
       Array.range(0, maxElements)
-        .foldRight(Code._empty[Unit]) { (i, cont) =>
+        .foldRight(Code._empty) { (i, cont) =>
           hasKey(node, i).orEmpty(
             Code(
               visitor(loadKey(node, i)),
@@ -200,18 +220,18 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
   }
 
   val deepCopy: Code[Long] => Code[Unit] = {
-    val f = fb.newMethod("deepCopy", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Long]), typeInfo[Unit])
+    val f = cb.genEmitMethod("btree_deepCopy", Array[TypeInfo[_]](typeInfo[Long], typeInfo[Long]), typeInfo[Unit])
     val destNode = f.getArg[Long](1)
     val srcNode = f.getArg[Long](2)
 
     val er = EmitRegion(f, region)
-    val newNode = f.newLocal[Long]
+    val newNode = f.newLocal[Long]()
 
     def copyChild(i: Int) =
       Code(createNode(newNode),
         f.invoke[Unit](newNode, loadChild(srcNode, i)))
 
-    val copyNodes = Array.range(0, maxElements).foldRight(Code._empty[Unit]) { (i, cont) =>
+    val copyNodes = Array.range(0, maxElements).foldRight(Code._empty) { (i, cont) =>
       hasKey(srcNode, i).orEmpty(
         Code(
           key.deepCopy(er, destNode, srcNode),
@@ -230,28 +250,30 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
     { srcRoot: Code[Long] => f.invoke(root, srcRoot) }
   }
 
-  def bulkStore(ob: Code[OutputBuffer])(keyStore: (Code[OutputBuffer], Code[Long]) => Code[Unit]): Code[Unit] = {
-    val f = fb.newMethod("bulkStore", Array[TypeInfo[_]](typeInfo[Long]), typeInfo[Unit])
+  def bulkStore(obCode: Code[OutputBuffer])(keyStore: (Value[OutputBuffer], Code[Long]) => Code[Unit]): Code[Unit] = {
+    val f = cb.genEmitMethod("btree_bulkStore", Array[TypeInfo[_]](typeInfo[Long], typeInfo[OutputBuffer]), typeInfo[Unit])
     val node = f.getArg[Long](1)
+    val ob = f.getArg[OutputBuffer](2)
 
     f.emit(Code(
       ob.writeBoolean(!isLeaf(node)),
-      (!isLeaf(node)).orEmpty(f.invoke(loadChild(node, -1))),
-      Array.range(0, maxElements).foldRight(Code._empty[Unit]) { (i, cont) =>
+      (!isLeaf(node)).orEmpty(f.invoke(loadChild(node, -1), ob)),
+      Array.range(0, maxElements).foldRight(Code._empty) { (i, cont) =>
         hasKey(node, i).mux(Code(
           ob.writeBoolean(true),
           keyStore(ob, loadKey(node, i)),
-          (!isLeaf(node)).orEmpty(f.invoke(loadChild(node, i))),
+          (!isLeaf(node)).orEmpty(f.invoke(loadChild(node, i), ob)),
           cont),
           ob.writeBoolean(false)) }))
-    f.invoke(root)
+    f.invoke(root, obCode)
   }
 
-  def bulkLoad(ib: Code[InputBuffer])(keyLoad: (Code[InputBuffer], Code[Long]) => Code[Unit]): Code[Unit] = {
-    val f = fb.newMethod("bulkLoad", Array[TypeInfo[_]](typeInfo[Long]), typeInfo[Unit])
+  def bulkLoad(ibCode: Code[InputBuffer])(keyLoad: (Value[InputBuffer], Code[Long]) => Code[Unit]): Code[Unit] = {
+    val f = cb.genEmitMethod("btree_bulkLoad", Array[TypeInfo[_]](typeInfo[Long], typeInfo[InputBuffer]), typeInfo[Unit])
     val node = f.getArg[Long](1)
-    val newNode = f.newLocal[Long]
-    val isInternalNode = f.newLocal[Boolean]
+    val ib = f.getArg[InputBuffer](2)
+    val newNode = f.newLocal[Long]()
+    val isInternalNode = f.newLocal[Boolean]()
 
     f.emit(Code(
       isInternalNode := ib.readBoolean(),
@@ -259,18 +281,18 @@ class AppendOnlyBTree(fb: EmitFunctionBuilder[_], key: BTreeKey, region: Code[Re
         Code(
           createNode(newNode),
           setChild(node, -1, newNode),
-          f.invoke(newNode)
+          f.invoke(newNode, ib)
       )),
-      Array.range(0, maxElements).foldRight(Code._empty[Unit]) { (i, cont) =>
+      Array.range(0, maxElements).foldRight(Code._empty) { (i, cont) =>
         ib.readBoolean().orEmpty(Code(
           setKeyPresent(node, i),
           keyLoad(ib, keyOffset(node, i)),
           isInternalNode.orEmpty(
             Code(createNode(newNode),
             setChild(node, i, newNode),
-            f.invoke(newNode))),
+            f.invoke(newNode, ib))),
           cont))
       }))
-    f.invoke(root)
+    f.invoke(root, ibCode)
   }
 }

@@ -105,7 +105,7 @@ package object stats {
     }
   }
 
-  val hweStruct = PStruct("het_freq_hwe" -> PFloat64(), "p_value" -> PFloat64())
+  val hweStruct = PStruct("het_freq_hwe" -> PFloat64(true), "p_value" -> PFloat64(true))
 
   def hardyWeinbergTest(nHomRef: Int, nHet: Int, nHomVar: Int): Array[Double] = {
     if (nHomRef < 0 || nHet < 0 || nHomVar < 0)
@@ -119,7 +119,7 @@ package object stats {
     Array(LH.getNumericalMean / n, LH.exactMidP(nAB))
   }
   
-  val chisqStruct = PStruct("p_value" -> PFloat64(), "odds_ratio" -> PFloat64())
+  val chisqStruct = PStruct("p_value" -> PFloat64(true), "odds_ratio" -> PFloat64(true))
   
   def chiSquaredTest(a0: Int, b0: Int, c0: Int, d0: Int): Array[Double] = {
     if (a0 < 0 || b0 < 0 || c0 < 0 || d0 < 0)
@@ -325,6 +325,13 @@ package object stats {
 
   // Returns the x for which p = Prob(Z < x) with Z a standard normal RV
   def qnorm(p: Double): Double = Normal.quantile(p, 0, 1, true, false)
+
+  // Returns the p for which p = Prob(Z < x) with Z a RV having the T distribution with n degrees of freedom
+  def pT(x: Double, n: Double, lower_tail: Boolean, log_p: Boolean): Double =
+    net.sourceforge.jdistlib.T.cumulative(x, n, lower_tail, log_p)
+
+  def pF(x: Double, df1: Double, df2: Double, lower_tail: Boolean, log_p: Boolean): Double =
+    net.sourceforge.jdistlib.F.cumulative(x, df1, df2, lower_tail, log_p)
 
   // Returns the p for which p = Prob(Z^2 > x) with Z^2 a chi-squared RV with df degrees of freedom
   def chiSquaredTail(x: Double, df: Double): Double = ChiSquare.cumulative(x, df, false, false)

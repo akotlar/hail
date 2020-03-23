@@ -7,7 +7,7 @@ from hail.expr.types import dtype
 from hail.expr.table_type import *
 from hail.expr.matrix_type import *
 from hail.expr.blockmatrix_type import *
-from hail.ir.renderer import Renderer
+from hail.ir.renderer import CSERenderer, Renderer
 from hail.table import Table
 from hail.matrixtable import MatrixTable
 
@@ -15,31 +15,19 @@ from hail.matrixtable import MatrixTable
 class Backend(abc.ABC):
     @abc.abstractmethod
     def execute(self, ir, timed=False):
-        return
+        pass
 
     @abc.abstractmethod
     def value_type(self, ir):
-        return
+        pass
 
     @abc.abstractmethod
     def table_type(self, tir):
-        return
+        pass
 
     @abc.abstractmethod
     def matrix_type(self, mir):
-        return
-
-    def persist_table(self, t, storage_level):
-        return t
-
-    def unpersist_table(self, t):
-        return t
-
-    def persist_matrix_table(self, mt, storage_level):
-        return mt
-
-    def unpersist_matrix_table(self, mt):
-        return mt
+        pass
 
     @abc.abstractmethod
     def add_reference(self, config):
@@ -47,7 +35,7 @@ class Backend(abc.ABC):
 
     @abc.abstractmethod
     def load_references_from_dataset(self, path):
-        return []
+        pass
 
     @abc.abstractmethod
     def from_fasta_file(self, name, fasta_file, index_file, x_contigs, y_contigs, mt_contigs, par):
@@ -86,6 +74,18 @@ class Backend(abc.ABC):
     def fs(self):
         pass
 
+    def persist_table(self, t, storage_level):
+        return t
+
+    def unpersist_table(self, t):
+        return t
+
+    def persist_matrix_table(self, mt, storage_level):
+        return mt
+
+    def unpersist_matrix_table(self, mt):
+        return mt
+
 
 class SparkBackend(Backend):
     def __init__(self):
@@ -100,13 +100,14 @@ class SparkBackend(Backend):
 
     def _to_java_ir(self, ir):
         if not hasattr(ir, '_jir'):
-            r = Renderer(stop_at_jir=True)
+            r = CSERenderer(stop_at_jir=True)
             # FIXME parse should be static
             ir._jir = ir.parse(r(ir), ir_map=r.jirs)
         return ir._jir
 
     def execute(self, ir, timed=False):
-        result = json.loads(Env.hc()._jhc.backend().executeJSON(self._to_java_ir(ir)))
+        jir = self._to_java_ir(ir)
+        result = json.loads(Env.hc()._jhc.backend().executeJSON(jir))
         value = ir.typ._from_json(result['value'])
         timings = result['timings']
 
@@ -141,7 +142,7 @@ class SparkBackend(Backend):
         return tblockmatrix._from_java(jir.typ())
 
     def from_spark(self, df, key):
-        return Table._from_java(Env.hail().table.Table.pyFromDF(df._jdf, key))
+        return Table._from_java(Env.jutils().pyFromDF(df._jdf, key))
 
     def to_spark(self, t, flatten):
         t = t.expand_types()
@@ -197,7 +198,7 @@ class LocalBackend(Backend):
 
     def _to_java_ir(self, ir):
         if not hasattr(ir, '_jir'):
-            r = Renderer(stop_at_jir=True)
+            r = CSERenderer(stop_at_jir=True)
             # FIXME parse should be static
             ir._jir = ir.parse(r(ir), ir_map=r.jirs)
         return ir._jir
@@ -228,7 +229,7 @@ class ServiceBackend(Backend):
         return self._fs
 
     def _render(self, ir):
-        r = Renderer()
+        r = CSERenderer()
         assert len(r.jirs) == 0
         return r(ir)
 
@@ -314,6 +315,9 @@ class ServiceBackend(Backend):
             raise FatalError(resp_json['message'])
         resp.raise_for_status()
         return resp.json()
+
+    def load_references_from_dataset(self, path):
+        raise NotImplementedError
 
     def add_sequence(self, name, fasta_file, index_file):
         resp = requests.post(f'{self.url}/references/sequence/set',

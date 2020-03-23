@@ -8,9 +8,7 @@ import yaml
 from .cluster_config import ClusterConfig
 
 DEFAULT_PROPERTIES = {
-    "spark:spark.driver.maxResultSize": "0",
     "spark:spark.task.maxFailures": "20",
-    "spark:spark.kryoserializer.buffer.max": "1g",
     "spark:spark.driver.extraJavaOptions": "-Xss4M",
     "spark:spark.executor.extraJavaOptions": "-Xss4M",
     "hdfs:dfs.replication": "1",
@@ -39,6 +37,22 @@ MACHINE_MEM = {
     'n1-highcpu-16': 14.4,
     'n1-highcpu-32': 28.8,
     'n1-highcpu-64': 57.6
+}
+
+REGION_TO_REPLICATE_MAPPING = {
+    'us-central1': 'us',
+    'us-east1': 'us',
+    'us-east4': 'us',
+    'us-west1': 'us',
+    'us-west2': 'us',
+    'us-west3': 'us',
+    # Europe != EU
+    'europe-north1': 'eu',
+    'europe-west1': 'eu',
+    'europe-west2': 'uk',
+    'europe-west3': 'eu',
+    'europe-west4': 'eu',
+    'australia-southeast1': 'aus-sydney'
 }
 
 SPARK_VERSION = '2.4.0'
@@ -71,8 +85,10 @@ def init_parser(parser):
                         help='Disk size of worker machines, in GB (default: %(default)s).')
     parser.add_argument('--worker-machine-type', '--worker',
                         help='Worker machine type (default: n1-standard-8, or n1-highmem-8 with --vep).')
-    parser.add_argument('--zone', default='us-central1-b',
-                        help='Compute zone for the cluster (default: %(default)s).')
+    parser.add_argument('--region',
+                        help='Compute region for the cluster.')
+    parser.add_argument('--zone',
+                        help='Compute zone for the cluster.')
     parser.add_argument('--properties',
                         help='Additional configuration properties for the cluster')
     parser.add_argument('--metadata',
@@ -86,6 +102,8 @@ def init_parser(parser):
     parser.add_argument('--max-age', type=str, help='If specified, maximum age before shutdown (e.g. 60m).')
     parser.add_argument('--bucket', type=str,
                         help='The Google Cloud Storage bucket to use for cluster staging (just the bucket name, no gs:// prefix).')
+    parser.add_argument('--network', type=str, help='the network for all nodes in this cluster')
+    parser.add_argument('--master-tags', type=str, help='comma-separated list of instance tags to apply to the mastern node')
 
     parser.add_argument('--wheel', help='Non-default Hail installation. Warning: experimental.')
 
@@ -98,6 +116,14 @@ def init_parser(parser):
                         required=False,
                         choices=['GRCh37', 'GRCh38'])
     parser.add_argument('--dry-run', action='store_true', help="Print gcloud dataproc command, but don't run it.")
+
+    # requester pays
+    parser.add_argument('--requester-pays-allow-all',
+                        help="Allow reading from all requester-pays buckets.",
+                        action='store_true',
+                        required=False)
+    parser.add_argument('--requester-pays-allow-buckets',
+                        help="Comma-separated list of requester-pays buckets to allow reading from.")
 
 
 def main(args, pass_through_args):
@@ -121,8 +147,40 @@ def main(args, pass_through_args):
     conf.extend_flag('initialization-actions',
                      [deploy_metadata['init_notebook.py']])
 
+    # requester pays support
+    if args.requester_pays_allow_all or args.requester_pays_allow_buckets:
+        if args.requester_pays_allow_all and args.requester_pays_allow_buckets:
+            raise RuntimeError("Cannot specify both 'requester_pays_allow_all' and 'requester_pays_allow_buckets")
+
+        if args.requester_pays_allow_all:
+            requester_pays_mode = "AUTO"
+        else:
+            requester_pays_mode = "CUSTOM"
+            conf.extend_flag("properties", {"spark:spark.hadoop.fs.gs.requester.pays.buckets": args.requester_pays_allow_buckets})
+
+        # Need to pick requester pays project.
+        requester_pays_project = args.project if args.project else sp.check_output(['gcloud', 'config', 'get-value', 'project']).decode().strip()
+
+        conf.extend_flag("properties", {"spark:spark.hadoop.fs.gs.requester.pays.mode": requester_pays_mode,
+                                        "spark:spark.hadoop.fs.gs.requester.pays.project.id": requester_pays_project})
+
+    # gcloud version 277 and onwards requires you to specify a region. Let's just require it for all hailctl users for consistency.
+    if args.region:
+        project_region = args.region
+    else:
+        try:
+            project_region = sp.check_output(['gcloud', 'config', 'get-value', 'dataproc/region']).decode().strip()
+        except sp.CalledProcessError:
+            raise RuntimeError("Could not determine dataproc region. Use --region argument to hailctl, or use `gcloud config set dataproc/region <my-region>` to set a default.")
+
     # add VEP init script
     if args.vep:
+        # VEP is too expensive if you have to pay egress charges. We must choose the right replicate.
+        replicate = REGION_TO_REPLICATE_MAPPING.get(project_region)
+        if replicate is None:
+            raise RuntimeError("The --vep argument is not currently provided in your region. Please contact the Hail team on https://discuss.hail.is for support.")
+        print(f"Pulling VEP data from bucket in {replicate}.")
+        conf.extend_flag('metadata', {"VEP_REPLICATE": replicate})
         conf.extend_flag('initialization-actions', [deploy_metadata[f'vep-{args.vep}.sh']])
     # add custom init scripts
     if args.init:
@@ -144,8 +202,10 @@ def main(args, pass_through_args):
         packages.extend(re.split(split_regex, args.packages))
     conf.extend_flag('metadata', {'PKGS': '|'.join(packages)})
 
-    # rewrite metadata to escape it
-    conf.flags['metadata'] = '^|||^' + '|||'.join(f'{k}={v}' for k, v in conf.flags['metadata'].items())
+    def disk_size(size):
+        if args.vep:
+            size = max(size, 200)
+        return str(size) + 'GB'
 
     conf.extend_flag('properties',
                      {"spark:spark.driver.memory": "{driver_memory}g".format(
@@ -156,11 +216,16 @@ def main(args, pass_through_args):
     conf.flags['num-preemptible-workers'] = args.num_preemptible_workers
     conf.flags['num-worker-local-ssds'] = args.num_worker_local_ssds
     conf.flags['num-workers'] = args.num_workers
-    conf.flags['preemptible-worker-boot-disk-size'] = '{}GB'.format(args.preemptible_worker_boot_disk_size)
-    conf.flags['worker-boot-disk-size'] = args.worker_boot_disk_size
+    conf.flags['preemptible-worker-boot-disk-size'] = disk_size(args.preemptible_worker_boot_disk_size)
+    conf.flags['worker-boot-disk-size'] = disk_size(args.worker_boot_disk_size)
     conf.flags['worker-machine-type'] = args.worker_machine_type
-    conf.flags['zone'] = args.zone
+    if args.region:
+        conf.flags['region'] = args.region
+    if args.zone:
+        conf.flags['zone'] = args.zone
     conf.flags['initialization-action-timeout'] = args.init_timeout
+    if args.network:
+        conf.flags['network'] = args.network
     if args.configuration:
         conf.flags['configuration'] = args.configuration
     if args.project:
@@ -173,6 +238,10 @@ def main(args, pass_through_args):
         conf.flags['labels'] = 'creator=' + re.sub(r'[^0-9a-z_\-]', '_', label.decode().strip().lower())[:63]
     except sp.CalledProcessError as e:
         sys.stderr.write("Warning: could not run 'gcloud config get-value account': " + e.output.decode() + "\n")
+
+    # rewrite metadata and properties to escape them
+    conf.flags['metadata'] = '^|||^' + '|||'.join(f'{k}={v}' for k, v in conf.flags['metadata'].items())
+    conf.flags['properties'] = '^|||^' + '|||'.join(f'{k}={v}' for k, v in conf.flags['properties'].items())
 
     # command to start cluster
     cmd = conf.get_command(args.name)
@@ -193,3 +262,8 @@ def main(args, pass_through_args):
     if not args.dry_run:
         print("Starting cluster '{}'...".format(args.name))
         sp.check_call(cmd)
+
+        if args.master_tags:
+            sp.check_call([
+                'gcloud', 'compute', 'instances', 'add-tags', args.name + '-m', '--tags',
+                args.master_tags])

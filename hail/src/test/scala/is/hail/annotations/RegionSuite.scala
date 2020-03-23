@@ -5,23 +5,6 @@ import org.scalatest.testng.TestNGSuite
 import org.testng.annotations.Test
 
 class RegionSuite extends TestNGSuite {
-  @Test def testRegionAppending() {
-    val buff = Region()
-
-    val addrA = buff.appendLong(124L)
-    val addrB = buff.appendByte(2)
-    val addrC = buff.appendByte(1)
-    val addrD = buff.appendByte(4)
-    val addrE = buff.appendInt(1234567)
-    val addrF = buff.appendDouble(1.1)
-
-    assert(buff.loadLong(addrA) == 124L)
-    assert(buff.loadByte(addrB) == 2)
-    assert(buff.loadByte(addrC) == 1)
-    assert(buff.loadByte(addrD) == 4)
-    assert(buff.loadInt(addrE) == 1234567)
-    assert(buff.loadDouble(addrF) == 1.1)
-  }
 
   @Test def testRegionSizes() {
     Region.smallScoped { region =>
@@ -34,7 +17,7 @@ class RegionSuite extends TestNGSuite {
   }
 
   @Test def testRegionAllocationSimple() {
-    using(new RegionPool(strictMemoryCheck = true)) { pool =>
+    using(RegionPool(strictMemoryCheck = true)) { pool =>
       assert(pool.numFreeBlocks() == 0)
       assert(pool.numRegions() == 0)
       assert(pool.numFreeRegions() == 0)
@@ -172,7 +155,7 @@ class RegionSuite extends TestNGSuite {
   }
 
   @Test def allocationAtStartOfBlockIsCorrect(): Unit = {
-    using(new RegionPool(strictMemoryCheck = true)) { pool =>
+    using(RegionPool(strictMemoryCheck = true)) { pool =>
       val region = pool.getRegion(Region.REGULAR)
       val off1 = region.allocate(1, 10)
       val off2 = region.allocate(1, 10)
@@ -182,7 +165,7 @@ class RegionSuite extends TestNGSuite {
   }
 
   @Test def blocksAreNotReleasedUntilRegionIsReleased(): Unit = {
-    using(new RegionPool(strictMemoryCheck = true)) { pool =>
+    using(RegionPool(strictMemoryCheck = true)) { pool =>
       val region = pool.getRegion(Region.REGULAR)
       val nBlocks = 5
       (0 until (Region.SIZES(Region.REGULAR)).toInt * nBlocks by 256).foreach { _ =>
@@ -195,7 +178,7 @@ class RegionSuite extends TestNGSuite {
   }
 
   @Test def largeChunksAreNotReturnedToBlockPool(): Unit = {
-    using(new RegionPool(strictMemoryCheck = true)) { pool =>
+    using(RegionPool(strictMemoryCheck = true)) { pool =>
       val region = pool.getRegion(Region.REGULAR)
       region.allocate(4, Region.SIZES(Region.REGULAR) - 4)
 
@@ -207,7 +190,7 @@ class RegionSuite extends TestNGSuite {
   }
 
   @Test def referencedRegionsAreNotFreedUntilReferencingRegionIsFreed(): Unit = {
-    using(new RegionPool(strictMemoryCheck = true)) { pool =>
+    using(RegionPool(strictMemoryCheck = true)) { pool =>
       val r1 = pool.getRegion()
       val r2 = pool.getRegion()
       r2.addReferenceTo(r1)
@@ -221,7 +204,7 @@ class RegionSuite extends TestNGSuite {
   }
 
   @Test def blockSizesWorkAsExpected(): Unit = {
-    using(new RegionPool(strictMemoryCheck = true)) { pool =>
+    using(RegionPool(strictMemoryCheck = true)) { pool =>
       assert(pool.numFreeRegions() == 0)
       assert(pool.numFreeBlocks() == 0)
 

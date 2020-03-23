@@ -18,12 +18,12 @@ trait StagedMonoidSpec {
 class MonoidAggregator(monoid: StagedMonoidSpec) extends StagedAggregator {
   type State = PrimitiveRVAState
   val typ: PType = monoid.typ
-  val resultType: PType = typ
+  val resultType: PType = typ.setRequired(monoid.neutral.isDefined)
 
-  def createState(fb: EmitFunctionBuilder[_]): State =
-    new PrimitiveRVAState(Array(typ.setRequired(monoid.neutral.isDefined)), fb)
+  def createState(cb: EmitClassBuilder[_]): State =
+    new PrimitiveRVAState(Array(typ.setRequired(monoid.neutral.isDefined)), cb)
 
-  def initOp(state: State, init: Array[EmitTriplet], dummy: Boolean): Code[Unit] = {
+  def initOp(state: State, init: Array[EmitCode], dummy: Boolean): Code[Unit] = {
     assert(init.length == 0)
     val (mOpt, v, _) = state.fields(0)
     (mOpt, monoid.neutral) match {
@@ -32,11 +32,11 @@ class MonoidAggregator(monoid: StagedMonoidSpec) extends StagedAggregator {
     }
   }
 
-  def seqOp(state: State, seq: Array[EmitTriplet], dummy: Boolean): Code[Unit] = {
+  def seqOp(state: State, seq: Array[EmitCode], dummy: Boolean): Code[Unit] = {
     val Array(elt) = seq
     val (mOpt, v, _) = state.fields(0)
-    val eltm = state.fb.newField[Boolean]
-    val eltv = state.fb.newField(typeToTypeInfo(typ))
+    val eltm = state.cb.genFieldThisRef[Boolean]()
+    val eltv = state.cb.genFieldThisRef()(typeToTypeInfo(typ))
     Code(elt.setup,
       eltm := elt.m,
       eltm.mux(Code._empty, eltv := elt.value),
@@ -62,28 +62,35 @@ class MonoidAggregator(monoid: StagedMonoidSpec) extends StagedAggregator {
   }
 
   private def combine(
-    m1Opt: Option[ClassFieldRef[Boolean]],
-    v1: ClassFieldRef[_],
+    m1Opt: Option[Settable[Boolean]],
+    v1: Settable[_],
     m2Opt: Option[Code[Boolean]],
     v2: Code[_]
   ): Code[Unit] = {
-    val combineAndStore = v1.storeAny(monoid(v1, v2))
-    (m1Opt, m2Opt) match {
-      case (None, None) =>
-        combineAndStore
-      case (None, Some(m2)) =>
-        // only update if the element is not missing
-        m2.mux(Code._empty, combineAndStore)
-      case (Some(m1), None) =>
-        m1.mux(
-          Code(m1.store(false), v1.storeAny(v2)),
-          combineAndStore)
-      case (Some(m1), Some(m2)) =>
-        m1.mux(
-          // if the current state is missing, then just copy the other
-          // element + its missingness
-          Code(m1.store(m2), v1.storeAny(v2)),
-          m2.mux(Code._empty, combineAndStore))
+    val ti = typeToTypeInfo(monoid.typ)
+    ti match {
+      case ti: TypeInfo[t] =>
+        (m1Opt, m2Opt) match {
+          case (None, None) =>
+            v1.storeAny(monoid(v1, v2))
+          case (None, Some(m2)) =>
+            // only update if the element is not missing
+            m2.mux(Code._empty, v1.storeAny(monoid(v1, v2)))
+          case (Some(m1), None) =>
+            Code.memoize(coerce[t](v2), "mon_agg_combine_v2") { v2 =>
+              m1.mux(
+                Code(m1.store(false), v1.storeAny(v2)),
+                v1.storeAny(monoid(v1, v2)))
+            }(ti)
+          case (Some(m1), Some(m2)) =>
+            Code.memoize(m2, "mon_agg_combine_m2", coerce[t](v2), "mon_agg_combine_v2") { (m2, v2) =>
+              m1.mux(
+                // if the current state is missing, then just copy the other
+                // element + its missingness
+                Code(m1.store(m2), v1.storeAny(v2)),
+                m2.mux(Code._empty, v1.storeAny(monoid(v1, v2))))
+            }(BooleanInfo, ti)
+        }
     }
   }
 }

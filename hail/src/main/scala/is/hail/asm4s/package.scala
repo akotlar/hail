@@ -1,17 +1,15 @@
 package is.hail
 
 import org.objectweb.asm.Opcodes._
-import org.objectweb.asm.Type
 import org.objectweb.asm.tree._
 
-import scala.collection.generic.Growable
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
 package asm4s {
   trait TypeInfo[T] {
-    val name: String
-    val iname: String = name
+    val desc: String
+    val iname: String = desc
     def loadOp: Int
     def storeOp: Int
     def aloadOp: Int
@@ -22,21 +20,21 @@ package asm4s {
     def newArray(): AbstractInsnNode
   }
 
-  class ClassInfo[C <: AnyRef](implicit val cct: ClassTag[C]) extends TypeInfo[C] {
-    val name = Type.getDescriptor(cct.runtimeClass)
-    override val iname = Type.getInternalName(cct.runtimeClass)
+  class ClassInfo[C](className: String) extends TypeInfo[C] {
+    val desc = s"L${ className.replace(".", "/") };"
+    override val iname = className.replace(".", "/")
     val loadOp = ALOAD
     val storeOp = ASTORE
     val aloadOp = AALOAD
     val astoreOp = AASTORE
     val returnOp = ARETURN
 
-    def newArray() = new TypeInsnNode(ANEWARRAY, iname)
+    def newArray(): AbstractInsnNode = new TypeInsnNode(ANEWARRAY, iname)
   }
 
-  class ArrayInfo[T](implicit val tct: ClassTag[Array[T]]) extends TypeInfo[Array[T]] {
-    val name = Type.getDescriptor(tct.runtimeClass)
-    override val iname = Type.getInternalName(tct.runtimeClass)
+  class ArrayInfo[T](implicit val tti: TypeInfo[T]) extends TypeInfo[Array[T]] {
+    val desc = s"[${ tti.desc }"
+    override val iname = desc.replace(".", "/")
     val loadOp = ALOAD
     val storeOp = ASTORE
     val aloadOp = AALOAD
@@ -48,14 +46,53 @@ package asm4s {
 }
 
 package object asm4s {
+  def genName(tag: String, baseName: String): String = lir.genName(tag, baseName)
 
   def typeInfo[T](implicit tti: TypeInfo[T]): TypeInfo[T] = tti
 
   def coerce[T](c: Code[_]): Code[T] =
     c.asInstanceOf[Code[T]]
 
+  def coerce[T](c: Value[_]): Value[T] =
+    c.asInstanceOf[Value[T]]
+
+  def coerce[T](c: Settable[_]): Settable[T] =
+    c.asInstanceOf[Settable[T]]
+
+  def typeInfoFromClassTag[T](ct: ClassTag[T]): TypeInfo[T] =
+    typeInfoFromClass(ct.runtimeClass.asInstanceOf[Class[T]])
+
+  def typeInfoFromClass[T](c: Class[T]): TypeInfo[T] = {
+    val ti: TypeInfo[_] = if (c.isPrimitive) {
+      if (c == java.lang.Void.TYPE)
+        UnitInfo
+      else if (c == java.lang.Byte.TYPE)
+        ByteInfo
+      else if (c == java.lang.Short.TYPE)
+        ShortInfo
+      else if (c == java.lang.Boolean.TYPE)
+        BooleanInfo
+      else if (c == java.lang.Integer.TYPE)
+        IntInfo
+      else if (c == java.lang.Long.TYPE)
+        LongInfo
+      else if (c == java.lang.Float.TYPE)
+        FloatInfo
+      else if (c == java.lang.Double.TYPE)
+        DoubleInfo
+      else {
+        assert(c == java.lang.Character.TYPE, c)
+        CharInfo
+      }
+    } else if (c.isArray) {
+      arrayInfo(typeInfoFromClass(c.getComponentType))
+    } else
+      classInfoFromClass(c)
+    ti.asInstanceOf[TypeInfo[T]]
+  }
+
   implicit object BooleanInfo extends TypeInfo[Boolean] {
-    val name = "Z"
+    val desc = "Z"
     val loadOp = ILOAD
     val storeOp = ISTORE
     val aloadOp = IALOAD
@@ -67,7 +104,7 @@ package object asm4s {
   }
 
   implicit object ByteInfo extends TypeInfo[Byte] {
-    val name = "B"
+    val desc = "B"
     val loadOp = ILOAD
     val storeOp = ISTORE
     val aloadOp = BALOAD
@@ -79,7 +116,7 @@ package object asm4s {
   }
 
   implicit object ShortInfo extends TypeInfo[Short] {
-    val name = "S"
+    val desc = "S"
     val loadOp = ILOAD
     val storeOp = ISTORE
     val aloadOp = IALOAD
@@ -91,7 +128,7 @@ package object asm4s {
   }
 
   implicit object IntInfo extends TypeInfo[Int] {
-    val name = "I"
+    val desc = "I"
     val loadOp = ILOAD
     val storeOp = ISTORE
     val aloadOp = IALOAD
@@ -102,7 +139,7 @@ package object asm4s {
   }
 
   implicit object LongInfo extends TypeInfo[Long] {
-    val name = "J"
+    val desc = "J"
     val loadOp = LLOAD
     val storeOp = LSTORE
     val aloadOp = LALOAD
@@ -114,18 +151,19 @@ package object asm4s {
   }
 
   implicit object FloatInfo extends TypeInfo[Float] {
-    val name = "F"
+    val desc = "F"
     val loadOp = FLOAD
     val storeOp = FSTORE
     val aloadOp = FALOAD
     val astoreOp = FASTORE
     val returnOp = FRETURN
 
+
     def newArray() = new IntInsnNode(NEWARRAY, T_FLOAT)
   }
 
   implicit object DoubleInfo extends TypeInfo[Double] {
-    val name = "D"
+    val desc = "D"
     val loadOp = DLOAD
     val storeOp = DSTORE
     val aloadOp = DALOAD
@@ -137,7 +175,7 @@ package object asm4s {
   }
 
   implicit object CharInfo extends TypeInfo[Char] {
-    val name = "C"
+    val desc = "C"
     val loadOp = ILOAD
     val storeOp = ISTORE
     val aloadOp = IALOAD
@@ -149,7 +187,7 @@ package object asm4s {
   }
 
   implicit object UnitInfo extends TypeInfo[Unit] {
-    val name = "V"
+    val desc = "V"
     def loadOp = ???
     def storeOp = ???
     def aloadOp = ???
@@ -160,10 +198,15 @@ package object asm4s {
     def newArray() = ???
   }
 
-  implicit def classInfo[C <: AnyRef](implicit cct: ClassTag[C]): TypeInfo[C] =
-    new ClassInfo
+  def classInfoFromClass[C](c: Class[C]): ClassInfo[C] = {
+    assert(!c.isPrimitive && !c.isArray)
+    new ClassInfo[C](c.getName)
+  }
 
-  implicit def arrayInfo[T](implicit cct: ClassTag[Array[T]]): TypeInfo[Array[T]] =
+  implicit def classInfo[C <: AnyRef](implicit cct: ClassTag[C]): TypeInfo[C] =
+    new ClassInfo[C](cct.runtimeClass.getName)
+
+  implicit def arrayInfo[T](implicit tti: TypeInfo[T]): TypeInfo[Array[T]] =
     new ArrayInfo
 
   object HailClassLoader extends ClassLoader(getClass.getClassLoader) {
@@ -179,9 +222,11 @@ package object asm4s {
     }
   }
 
-  def loadClass(className: String, b: Array[Byte]): Class[_] = {
+  def loadClass(className: String, b: Array[Byte]): Class[_] =
     HailClassLoader.loadOrDefineClass(className, b)
-  }
+
+  def loadClass(className: String): Class[_] =
+    HailClassLoader.loadClass(className)
 
   def ??? = throw new UnsupportedOperationException
 
@@ -189,9 +234,7 @@ package object asm4s {
 
   implicit def toCodeInt(c: Code[Int]): CodeInt = new CodeInt(c)
 
-  implicit def byteToCodeInt(c: Code[Byte]): Code[Int] = new Code[Int] {
-    def emit(il: Growable[AbstractInsnNode]) = c.emit(il)
-  }
+  implicit def byteToCodeInt(c: Code[Byte]): Code[Int] = c.asInstanceOf[Code[Int]]
 
   implicit def byteToCodeInt2(c: Code[Byte]): CodeInt = toCodeInt(byteToCodeInt(c))
 
@@ -213,16 +256,29 @@ package object asm4s {
   implicit def toCodeNullable[T >: Null : TypeInfo](c: Code[T]): CodeNullable[T] =
     new CodeNullable(c)
 
-  implicit def toCode[T](insn: => AbstractInsnNode): Code[T] = new Code[T] {
-    def emit(il: Growable[AbstractInsnNode]): Unit = {
-      il += insn
-    }
-  }
+  implicit def indexedSeqValueToCode[T](v: IndexedSeq[Value[T]]): IndexedSeq[Code[T]] = v.map(_.get)
 
-  implicit def toCodeFromIndexedSeq[T](codes: => TraversableOnce[Code[T]]): Code[T] = new Code[T] {
-    def emit(il: Growable[AbstractInsnNode]): Unit =
-      codes.foreach(_.emit(il))
-  }
+  implicit def valueToCode[T](v: Value[T]): Code[T] = v.get
+
+  implicit def valueToCodeInt(f: Value[Int]): CodeInt = new CodeInt(f.get)
+
+  implicit def valueToCodeLong(f: Value[Long]): CodeLong = new CodeLong(f.get)
+
+  implicit def valueToCodeFloat(f: Value[Float]): CodeFloat = new CodeFloat(f.get)
+
+  implicit def valueToCodeDouble(f: Value[Double]): CodeDouble = new CodeDouble(f.get)
+
+  implicit def valueToCodeChar(f: Value[Char]): CodeChar = new CodeChar(f.get)
+
+  implicit def valueToCodeString(f: Value[String]): CodeString = new CodeString(f.get)
+
+  implicit def valueToCodeObject[T <: AnyRef](f: Value[T])(implicit tct: ClassTag[T]): CodeObject[T] = new CodeObject(f.get)
+
+  implicit def valueToCodeArray[T](c: Value[Array[T]])(implicit tti: TypeInfo[T]): CodeArray[T] = new CodeArray(c)
+
+  implicit def valueToCodeBoolean(f: Value[Boolean]): CodeBoolean = new CodeBoolean(f.get)
+
+  implicit def valueToCodeNullable[T >: Null : TypeInfo](c: Value[T]): CodeNullable[T] = new CodeNullable(c)
 
   implicit def toCode[T](f: Settable[T]): Code[T] = f.load()
 
@@ -248,19 +304,39 @@ package object asm4s {
 
   implicit def toLocalRefInt(f: LocalRef[Int]): LocalRefInt = new LocalRefInt(f)
 
-  implicit def const(s: String): Code[String] = Code(new LdcInsnNode(s))
+  def _const[T](a: T): Value[T] = new Value[T] {
+    def get: Code[T] = Code(lir.ldcInsn(a))
+  }
 
-  implicit def const(b: Boolean): Code[Boolean] = Code(new LdcInsnNode(if (b) 1 else 0))
+  implicit def const(s: String): Value[String] = _const(s)
 
-  implicit def const(i: Int): Code[Int] = Code(new LdcInsnNode(i))
+  implicit def const(b: Boolean): Value[Boolean] = _const(b)
 
-  implicit def const(l: Long): Code[Long] = Code(new LdcInsnNode(l))
+  implicit def const(i: Int): Value[Int] = _const(i)
 
-  implicit def const(f: Float): Code[Float] = Code(new LdcInsnNode(f))
+  implicit def const(l: Long): Value[Long] = _const(l)
 
-  implicit def const(d: Double): Code[Double] = Code(new LdcInsnNode(d))
+  implicit def const(f: Float): Value[Float] = _const(f)
 
-  implicit def const(c: Char): Code[Char] = Code(new LdcInsnNode(c))
+  implicit def const(d: Double): Value[Double] = _const(d)
 
-  implicit def const(b: Byte): Code[Byte] = Code(new LdcInsnNode(b))
+  implicit def const(c: Char): Value[Char] = _const(c)
+
+  implicit def const(b: Byte): Value[Byte] = _const(b)
+
+  implicit def strToCode(s: String): Code[String] = _const(s)
+
+  implicit def boolToCode(b: Boolean): Code[Boolean] = _const(b)
+
+  implicit def intToCode(i: Int): Code[Int] = _const(i)
+
+  implicit def longToCode(l: Long): Code[Long] = _const(l)
+
+  implicit def floatToCode(f: Float): Code[Float] = _const(f)
+
+  implicit def doubleToCode(d: Double): Code[Double] = _const(d)
+
+  implicit def charToCode(c: Char): Code[Char] = _const(c)
+
+  implicit def byteToCode(b: Byte): Code[Byte] = _const(b)
 }

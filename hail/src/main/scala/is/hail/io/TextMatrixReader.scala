@@ -4,7 +4,7 @@ import is.hail.HailContext
 import is.hail.annotations._
 import is.hail.asm4s._
 import is.hail.backend.BroadcastValue
-import is.hail.expr.ir.{ ExecuteContext, IRParser, MatrixHybridReader, MatrixIR, MatrixLiteral, MatrixValue, TableLiteral, TableRead, TableValue }
+import is.hail.expr.ir.{EmitFunctionBuilder, ExecuteContext, IRParser, MatrixHybridReader, MatrixIR, MatrixLiteral, MatrixValue, TableLiteral, TableRead, TableValue, TextReaderOptions}
 import is.hail.expr.types._
 import is.hail.expr.types.physical._
 import is.hail.expr.types.virtual._
@@ -28,42 +28,78 @@ object TextMatrixReader {
     }
   }
 
-  def parseHeader(
+  private case class HeaderInfo (
+    headerValues: Array[String],
+    rowFieldNames: Array[String],
+    columnIdentifiers: Array[_] // String or Int
+  ) {
+    val nCols = columnIdentifiers.length
+  }
+
+  private def parseHeader(
     fs: FS,
     file: String,
     sep: Char,
     nRowFields: Int,
-    hasHeader: Boolean
-  ): (Array[String], Int) = {
-    if (hasHeader) {
-      val lines = fs.readFile(file) { s => Source.fromInputStream(s).getLines().take(2).toArray }
-      lines match {
-        case Array(header, first) =>
-          val nCols = first.split(charRegex(sep), -1).length - nRowFields
-          if (nCols < 0)
-            fatal(s"More row fields ($nRowFields) than columns (${ nRowFields + nCols }) in file: $file")
-          (header.split(charRegex(sep), -1), nCols)
-        case _ =>
-          fatal(s"file in import_matrix contains no data: $file")
-      }
-    } else {
-      val nCols = fs.readFile(file) { s => Source.fromInputStream(s).getLines().next() }.count(_ == sep) + 1
-      (Array(), nCols - nRowFields)
-    }
-  }
+    opts: TextMatrixReaderOptions
+  ): HeaderInfo = {
+    val maybeFirstTwoLines = fs.readFile(file) { s =>
+      Source.fromInputStream(s).getLines().filter(!opts.isComment(_)).take(2).toArray.toSeq }
 
-  def splitHeader(cols: Array[String], nRowFields: Int, nColIDs: Int): (Array[String], Array[_]) = {
-    if (cols.length == nColIDs) {
-      (Array.tabulate(nRowFields)(i => s"f$i"), cols)
-    } else if (cols.length == nColIDs + nRowFields) {
-      (cols.take(nRowFields), cols.drop(nRowFields))
-    } else if (cols.isEmpty) {
-      (Array.tabulate(nRowFields)(i => s"f$i"), Array.range(0, nColIDs))
-    } else
-      fatal(
-        s"""Expected file header to contain all $nColIDs column IDs and
-            | optionally all $nRowFields row field names: found ${ cols.length } header elements.
-           """.stripMargin)
+    (opts.hasHeader, maybeFirstTwoLines) match {
+      case (true, Seq()) =>
+        fatal(s"Expected header in every file, but found empty file: $file")
+      case (true, Seq(header)) =>
+        warn(s"File $file contains a header, but no lines of data.")
+        val headerValues = header.split(sep)
+        if (headerValues.length < nRowFields) {
+          fatal(
+            s"""File ${file} contains one line and you told me it had a header,
+               |so I expected to see at least the ${nRowFields} row field names
+               |on the header line, but instead I only saw ${headerValues.length}
+               |separated values. The header was:
+               |    ${header}""".stripMargin)
+        }
+        HeaderInfo(
+          headerValues,
+          headerValues.slice(0, nRowFields),
+          headerValues.drop(nRowFields))
+      case (true, Seq(header, dataLine)) =>
+        val headerValues = header.split(sep)
+        val nHeaderValues = headerValues.length
+        val nSeparatedValues = dataLine.split(sep).length
+        if (nHeaderValues + nRowFields == nSeparatedValues) {
+          HeaderInfo(
+            headerValues,
+            rowFieldNames = Array.tabulate(nRowFields)(i => s"f$i"),
+            columnIdentifiers = headerValues)
+        } else if (nHeaderValues == nSeparatedValues) {
+          HeaderInfo(
+            headerValues,
+            rowFieldNames = headerValues.slice(0, nRowFields),
+            columnIdentifiers = headerValues.drop(nRowFields))
+        } else {
+          fatal(
+            s"""In file $file, expected the header line to match either:
+               |    rowField0 rowField1 ... rowField${nRowFields} colId0 colId1 ...
+               |or
+               |    colId0 colId1 ...
+               |Instead the first two lines were:
+               |    ${header.truncate}
+               |    ${dataLine.truncate}
+               |The first line contained ${nHeaderValues} separated values and the
+               |second line contained ${nSeparatedValues} separated values.""".stripMargin)
+        }
+      case (false, Seq()) =>
+        warn(s"File $file is empty and has no header, so we assume no columns.")
+        HeaderInfo(Array(), Array.tabulate(nRowFields)(i => s"f$i"), Array())
+      case (false, firstLine +: _) =>
+        val nSeparatedValues = firstLine.split(sep).length
+        HeaderInfo(
+          Array(),
+          Array.tabulate(nRowFields)(i => s"f$i"),
+          Array.range(0, nSeparatedValues - nRowFields))
+    }
   }
 
   def makePartitionerFromCounts(partitionCounts: Array[Long], kType: TStruct): (RVDPartitioner, Array[Int]) = {
@@ -82,7 +118,11 @@ object TextMatrixReader {
     (new RVDPartitioner(Array(kType.fieldNames(0)), kType, ranges), keepPartitions.result())
   }
 
-  def verifyRowFields(fieldNames: Array[String], fieldTypes: Map[String, Type]): TStruct = {
+  def verifyRowFields(
+    fileName: String,
+    fieldNames: Array[String],
+    fieldTypes: Map[String, Type]
+  ): TStruct = {
     val headerDups = fieldNames.duplicates()
     if (headerDups.nonEmpty)
       fatal(s"Found following duplicate row fields in header: \n    ${ headerDups.mkString("\n    ") }")
@@ -90,12 +130,16 @@ object TextMatrixReader {
     val fields: Array[(String, Type)] = fieldNames.map { name =>
       fieldTypes.get(name) match {
         case Some(t) => (name, t)
-        case None => fatal(
-          s"""row field $name not found in provided row_fields dictionary.
-             |    expected fields:
+        case None =>
+          val rowFieldsAsPython = fieldTypes
+            .map { case (fieldName, typ) => s"'${fieldName}': ${typ.toString}" }
+            .mkString("{", ",\n       ", "}")
+          fatal(
+          s"""In file $fileName, found a row field, $name, that is not in `row_fields':
+             |    row fields found in file:
              |      ${ fieldNames.mkString("\n      ") }
-             |    found fields:
-             |      ${ fieldTypes.keys.mkString("\n      ") }
+             |    row_fields:
+             |      ${ rowFieldsAsPython }
            """.stripMargin)
       }
     }
@@ -122,8 +166,9 @@ object TextMatrixReader {
                 fatal(
                   s"""invalid header: lengths of headers differ.
                      |    ${ hd1.length } elements in ${ paths(0) }
+                     |        ${hd1.truncate}
                      |    ${ hd.length } elements in ${ fileByPartition(i) }
-               """.stripMargin
+                     |        ${hd.truncate}""".stripMargin
                 )
               }
               hd1.zip(hd).zipWithIndex.foreach { case ((s1, s2), j) =>
@@ -139,9 +184,11 @@ object TextMatrixReader {
           }
         }
         it
-      }.countPerPartition().scanLeft(0L)(_ + _)
+      }.countPerPartition()
   }
 }
+
+case class TextMatrixReaderOptions(comment: Array[String], hasHeader: Boolean) extends TextReaderOptions
 
 case class TextMatrixReader(
   paths: Array[String],
@@ -152,7 +199,8 @@ case class TextMatrixReader(
   hasHeader: Boolean,
   separatorStr: String,
   gzipAsBGZip: Boolean,
-  addRowId: Boolean
+  addRowId: Boolean,
+  comment: Array[String]
 ) extends MatrixHybridReader {
   import TextMatrixReader._
   private[this] val hc = HailContext.get
@@ -162,37 +210,40 @@ case class TextMatrixReader(
   assert(separatorStr.length == 1)
   private[this] val separator = separatorStr.charAt(0)
   private[this] val rowFields = rowFieldsStr.mapValues(IRParser.parseType(_))
-  private[this] val entryType = TStruct(true, "x" -> IRParser.parseType(entryTypeStr))
+  private[this] val entryType = TStruct("x" -> IRParser.parseType(entryTypeStr))
   private[this] val resolvedPaths = fs.globAll(paths)
   require(entryType.size == 1, "entryType can only have 1 field")
   if (resolvedPaths.isEmpty)
     fatal("no paths specified for import_matrix_table.")
   assert((rowFields.values ++ entryType.types).forall { t =>
-    t.isOfType(TString()) ||
-    t.isOfType(TInt32()) ||
-    t.isOfType(TInt64()) ||
-    t.isOfType(TFloat32()) ||
-    t.isOfType(TFloat64())
+    t == TString ||
+    t == TInt32 ||
+    t == TInt64 ||
+    t == TFloat32 ||
+    t == TFloat64
   })
 
+  val opts = TextMatrixReaderOptions(comment, hasHeader)
 
-  private[this] val (header1, nCols) = parseHeader(fs, resolvedPaths.head, separator, rowFields.size, hasHeader)
-  private[this] val (rowFieldNames, colIDs) = splitHeader(header1, rowFields.size, nCols)
-  if (addRowId && rowFieldNames.contains("row_id")) {
+  private[this] val headerInfo = parseHeader(fs, resolvedPaths.head, separator, rowFields.size, opts)
+  if (addRowId && headerInfo.rowFieldNames.contains("row_id")) {
     fatal(
       s"""If no key is specified, `import_matrix_table`, uses 'row_id'
          |as the key, please provide a key or choose a different row field name.\n
-         |  Row field names: ${rowFieldNames}""".stripMargin)
+         |  Row field names: ${headerInfo.rowFieldNames}""".stripMargin)
   }
-  private[this] val rowFieldTypeWithoutRowId = verifyRowFields(rowFieldNames, rowFields)
+  private[this] val rowFieldTypeWithoutRowId = verifyRowFields(
+    resolvedPaths.head, headerInfo.rowFieldNames, rowFields)
   private[this] val rowFieldType =
-    if (addRowId) TStruct("row_id" -> TInt64()) ++ rowFieldTypeWithoutRowId
+    if (addRowId) TStruct("row_id" -> TInt64) ++ rowFieldTypeWithoutRowId
     else rowFieldTypeWithoutRowId
-  private[this] val header1Bc = hc.backend.broadcast(header1)
+  private[this] val header1Bc = hc.backend.broadcast(headerInfo.headerValues)
   if (hasHeader)
-    warnDuplicates(colIDs.asInstanceOf[Array[String]])
+    warnDuplicates(headerInfo.columnIdentifiers.asInstanceOf[Array[String]])
   private[this] val lines = HailContext.maybeGZipAsBGZip(gzipAsBGZip) {
+    val localOpts = opts
     sc.textFilesLines(resolvedPaths, nPartitions.getOrElse(sc.defaultMinPartitions))
+      .filter(line => !localOpts.isComment(line.value))
   }
   private[this] val fileByPartition = lines.partitions.map(p => partitionPath(p))
   private[this] val firstPartitions = fileByPartition.scanLeft(0) {
@@ -206,13 +257,13 @@ case class TextMatrixReader(
     header1Bc,
     separator)
 
-  def columnCount = Some(nCols)
+  def columnCount = Some(headerInfo.nCols)
 
   def partitionCounts = Some(_partitionCounts)
 
   val fullMatrixType = MatrixType(
-    TStruct.empty(),
-    colType = TStruct("col_id" -> (if (hasHeader) TString() else TInt32())),
+    TStruct.empty,
+    colType = TStruct("col_id" -> (if (hasHeader) TString else TInt32)),
     colKey = Array("col_id"),
     rowType = rowFieldType,
     rowKey = Array().toFastIndexedSeq,
@@ -223,20 +274,20 @@ case class TextMatrixReader(
     val compiledLineParser = new CompiledLineParser(
       rowFieldType,
       requestedType,
-      nCols,
+      headerInfo.nCols,
       missingValue,
       separator,
       _partitionCounts,
       fileByPartition,
       firstPartitions,
       hasHeader)
-    val rdd = ContextRDD.weaken[RVDContext](lines.filter(l => l.value.nonEmpty))
+    val rdd = ContextRDD.weaken(lines.filter(l => l.value.nonEmpty))
       .cmapPartitionsWithIndex(compiledLineParser)
     val rvd = if (tr.dropRows)
       RVD.empty(sc, requestedType.canonicalRVDType)
     else
       RVD.unkeyed(PStruct.canonical(requestedType.rowType), rdd)
-    val globalValue = makeGlobalValue(ctx, requestedType, colIDs.map(Row(_)))
+    val globalValue = makeGlobalValue(ctx, requestedType, headerInfo.columnIdentifiers.map(Row(_)))
     TableValue(tr.typ, globalValue, rvd)
   }
 }
@@ -267,19 +318,19 @@ class CompiledLineParser(
     .map(f => f.typ.asInstanceOf[PArray])
   @transient private[this] val rowFieldsType = requestedRowType
     .dropFields(Set(MatrixType.entriesIdentifier))
-  @transient private[this] val fb = new Function4Builder[Region, String, Long, String, Long]("text_matrix_reader")
+  @transient private[this] val fb = EmitFunctionBuilder[Region, String, Long, String, Long]("text_matrix_reader")
   @transient private[this] val mb = fb.apply_method
-  @transient private[this] val region = fb.arg1
-  @transient private[this] val _filename = fb.arg2
-  @transient private[this] val _lineNumber = fb.arg3
-  @transient private[this] val _line = fb.arg4
-  @transient private[this] val filename = mb.newField[String]("filename")
-  @transient private[this] val lineNumber = mb.newField[Long]("lineNumber")
-  @transient private[this] val line = mb.newField[String]("line")
-  @transient private[this] val pos = mb.newField[Int]("pos")
+  @transient private[this] val region = fb.getArg[Region](1)
+  @transient private[this] val _filename = fb.getArg[String](2)
+  @transient private[this] val _lineNumber = fb.getArg[Long](3)
+  @transient private[this] val _line = fb.getArg[String](4)
+  @transient private[this] val filename = mb.genFieldThisRef[String]("filename")
+  @transient private[this] val lineNumber = mb.genFieldThisRef[Long]("lineNumber")
+  @transient private[this] val line = mb.genFieldThisRef[String]("line")
+  @transient private[this] val pos = mb.genFieldThisRef[Int]("pos")
   @transient private[this] val srvb = new StagedRegionValueBuilder(mb, requestedRowType)
 
-  fb.addInitInstructions(Code(
+  fb.cb.emitInit(Code(
     pos := 0,
     filename := Code._null,
     lineNumber := 0L,
@@ -287,19 +338,20 @@ class CompiledLineParser(
     srvb.init()))
 
 
-  @transient private[this] val parseStringMb = fb.newMethod[Region, String]
+  @transient private[this] val parseStringMb = fb.genMethod[Region, String]("parseString")
   parseStringMb.emit(parseString(parseStringMb))
-  @transient private[this] val parseIntMb = fb.newMethod[Region, Int]
+  @transient private[this] val parseIntMb = fb.genMethod[Region, Int]("parseInt")
   parseIntMb.emit(parseInt(parseIntMb))
-  @transient private[this] val parseLongMb = fb.newMethod[Region, Long]
+  @transient private[this] val parseLongMb = fb.genMethod[Region, Long]("parseLong")
   parseLongMb.emit(parseLong(parseLongMb))
+  @transient private[this] val parseRowFieldsMb = fb.genMethod[Region, Unit]("parseRowFields")
+  parseRowFieldsMb.emit(parseRowFields(parseRowFieldsMb))
+
   @transient private[this] val parseEntriesMbOpt = entriesType.map { entriesType =>
-    val parseEntriesMb = fb.newMethod[Region, Unit]
+    val parseEntriesMb = fb.genMethod[Region, Unit]("parseEntries")
     parseEntriesMb.emit(parseEntries(parseEntriesMb, entriesType))
     parseEntriesMb
   }
-  @transient private[this] val parseRowFieldsMb = fb.newMethod[Region, Unit]
-  parseRowFieldsMb.emit(parseRowFields(parseRowFieldsMb))
 
   mb.emit(Code(
     pos := 0,
@@ -313,30 +365,34 @@ class CompiledLineParser(
 
   private[this] val loadParserOnWorker = fb.result()
 
-  private[this] def parseError[T](msg: Code[String]): Code[T] =
-    Code._throw(Code.newInstance[MatrixParseError, String, String, Long, Int, Int](
+  private[this] def parseError[T](msg: Code[String])(implicit tti: TypeInfo[T]): Code[T] =
+    Code._throw[MatrixParseError, T](Code.newInstance[MatrixParseError, String, String, Long, Int, Int](
       msg, filename, lineNumber, pos, pos + 1))
 
   private[this] def numericValue(c: Code[Char]): Code[Int] =
-    ((c < const('0')) || (c > const('9'))).mux(
-      parseError(const("invalid character '")
-        .concat(c.toS)
-        .concat("' in integer literal")),
-      (c - const('0')).toI)
+    Code.memoize(c, "clp_numeric_val_c") { c =>
+      ((c < const('0')) || (c > const('9'))).mux(
+        parseError[Int](const("invalid character '")
+          .concat(c.toS)
+          .concat("' in integer literal")),
+        (c - const('0')).toI)
+    }
 
   private[this] def endField(p: Code[Int]): Code[Boolean] =
-    p.ceq(line.length()) || line(p).ceq(const(separator))
+    Code.memoize(p, "clp_end_field_p") { p =>
+      p.ceq(line.length()) || line(p).ceq(const(separator))
+    }
 
   private[this] def endField(): Code[Boolean] =
     endField(pos)
 
   private[this] def missingOr(
-    mb: MethodBuilder,
+    mb: MethodBuilder[_],
     srvb: StagedRegionValueBuilder,
     parse: Code[Unit]
   ): Code[Unit] = {
     assert(missingValue.size > 0)
-    val end = mb.newField[Int]
+    val end = mb.genFieldThisRef[Int]()
     val condition = Code(
       end := pos + missingValue.size,
       end <= line.length && endField(end) &&
@@ -349,9 +405,9 @@ class CompiledLineParser(
       parse)
   }
 
-  private[this] def skipMissingOr(mb: MethodBuilder, skip: Code[Unit]): Code[Unit] = {
+  private[this] def skipMissingOr(mb: MethodBuilder[_], skip: Code[Unit]): Code[Unit] = {
     assert(missingValue.size > 0)
-    val end = mb.newField[Int]
+    val end = mb.genFieldThisRef[Int]()
     val condition = Code(
       end := pos + missingValue.size,
       end < line.length && endField(end) &&
@@ -362,12 +418,12 @@ class CompiledLineParser(
       skip)
   }
 
-  private[this] def parseInt(mb: MethodBuilder): Code[Int] = {
+  private[this] def parseInt(mb: MethodBuilder[_]): Code[Int] = {
     val mul = mb.newLocal[Int]("mul")
     val v = mb.newLocal[Int]("v")
     val c = mb.newLocal[Char]("c")
     endField().mux(
-      parseError("empty integer literal"),
+      parseError[Int]("empty integer literal"),
       Code(
         mul := 1,
         (line(pos).ceq(const('-'))).mux(
@@ -385,12 +441,12 @@ class CompiledLineParser(
         v * mul))
   }
 
-  private[this] def parseLong(mb: MethodBuilder): Code[Long] = {
+  private[this] def parseLong(mb: MethodBuilder[_]): Code[Long] = {
     val mul = mb.newLocal[Long]("mulL")
     val v = mb.newLocal[Long]("vL")
     val c = mb.newLocal[Char]("c")
     endField().mux(
-      parseError(const("empty long literal at ")),
+      parseError[Long](const("empty long literal at ")),
       Code(
         mul := 1L,
         (line(pos).ceq(const('-'))).mux(
@@ -406,7 +462,7 @@ class CompiledLineParser(
         v * mul))
   }
 
-  private[this] def parseString(mb: MethodBuilder): Code[String] = {
+  private[this] def parseString(mb: MethodBuilder[_]): Code[String] = {
     val start = mb.newLocal[Int]("start")
     Code(
       start := pos,
@@ -415,7 +471,7 @@ class CompiledLineParser(
       line.invoke[Int, Int, String]("substring", start, pos))
   }
 
-  private[this] def parseType(mb: MethodBuilder, srvb: StagedRegionValueBuilder, t: PType): Code[Unit] = {
+  private[this] def parseType(mb: MethodBuilder[_], srvb: StagedRegionValueBuilder, t: PType): Code[Unit] = {
     val parseDefinedValue = t match {
       case _: PInt32 =>
         srvb.addInt(parseIntMb.invoke(region))
@@ -433,16 +489,16 @@ class CompiledLineParser(
     if (t.required) parseDefinedValue else missingOr(mb, srvb, parseDefinedValue)
   }
 
-  private[this] def skipType(mb: MethodBuilder, t: PType): Code[Unit] = {
+  private[this] def skipType(mb: MethodBuilder[_], t: PType): Code[Unit] = {
     val skipDefinedValue = Code.whileLoop(!endField(), pos := pos + 1)
     if (t.required) skipDefinedValue else skipMissingOr(mb, skipDefinedValue)
   }
 
-  private[this] def parseRowFields(mb: MethodBuilder): Code[_] = {
+  private[this] def parseRowFields(mb: MethodBuilder[_]): Code[_] = {
     var inputIndex = 0
     var outputIndex = 0
     assert(onDiskRowFieldsType.size >= rowFieldsType.size)
-    val ab = new ArrayBuilder[Code[_]]()
+    val ab = new ArrayBuilder[Code[Unit]]()
     while (inputIndex < onDiskRowFieldsType.size) {
       val onDiskField = onDiskRowFieldsType.fields(inputIndex)
       val onDiskPType = PType.canonical(onDiskField.typ) // will always be optional
@@ -466,7 +522,7 @@ class CompiledLineParser(
             pos := pos + 1)
         ab += (pos < line.length).mux(
           parseAndAddField,
-          parseError(
+          parseError[Unit](
             const("unexpected end of line while reading row field ")
               .concat(onDiskField.name)))
         ab += srvb.advance()
@@ -475,10 +531,10 @@ class CompiledLineParser(
       inputIndex += 1
     }
     assert(outputIndex == rowFieldsType.size)
-    Code.apply(ab.result():_*)
+    Code(ab.result())
   }
 
-  private[this] def parseEntries(mb: MethodBuilder, entriesType: PArray): Code[Unit] = {
+  private[this] def parseEntries(mb: MethodBuilder[_], entriesType: PArray): Code[Unit] = {
     val i = mb.newLocal[Int]("i")
     val entryType = entriesType.elementType.asInstanceOf[PStruct]
     assert(entryType.fields.size == 1)
@@ -491,7 +547,7 @@ class CompiledLineParser(
             Code(
               srvb.start(),
               (pos >= line.length).mux(
-                parseError(
+                parseError[Unit](
                   const("unexpected end of line while reading entry ")
                     .concat(i.toS)),
                 Code._empty),
