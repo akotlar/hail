@@ -4,7 +4,7 @@ import hail as hl
 from hail.expr.functions import _ndarray
 from hail.expr.functions import array as aarray
 from hail.expr.types import HailType, tfloat64, ttuple, tndarray
-from hail.typecheck import typecheck, nullable, oneof, tupleof, sequenceof
+from hail.typecheck import typecheck, nullable, oneof, tupleof, sequenceof, enumeration
 from hail.expr.expressions import (
     expr_int32, expr_int64, expr_tuple, expr_any, expr_array, expr_ndarray,
     Int64Expression, cast_expr, construct_expr)
@@ -12,7 +12,8 @@ from hail.expr.expressions.typed_expressions import NDArrayNumericExpression
 from hail.ir import NDArrayQR, NDArrayInv, NDArrayConcat
 
 
-def array(input_array):
+@typecheck(a=expr_array(), order=enumeration("C", "F"))
+def array(input_array, order="C"):
     """Construct an :class:`.NDArrayExpression`
 
     Examples
@@ -36,13 +37,21 @@ def array(input_array):
     Parameters
     ----------
     input_array : :class:`.ArrayExpression` or numpy ndarray or nested python lists
-
+    order : {'C', 'F'}, optional
+        Whether the output should be stored in row-major (C-style) or
+        column-major (Fortran-style) order in memory.
     Returns
     -------
     :class:`.NDArrayExpression`
         An ndarray based on the input array.
     """
-    return _ndarray(input_array)
+
+    if order == "C" or order is None:
+        is_row_major = True
+    else:
+        is_row_major = False
+
+    return _ndarray(input_array, row_major=is_row_major)
 
 
 shape_type = oneof(expr_int64, tupleof(expr_int64), expr_tuple())

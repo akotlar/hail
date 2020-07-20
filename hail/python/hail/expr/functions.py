@@ -4195,7 +4195,7 @@ def _ndarray(collection, row_major=None):
         data_expr = hl.array(data) if data else hl.empty_array("float64")
         ndim = builtins.len(shape)
 
-    ndir = ir.MakeNDArray(data_expr._ir, shape_expr._ir, hl.bool(True)._ir)
+    ndir = ir.MakeNDArray(data_expr._ir, shape_expr._ir, hl.bool(row_major)._ir)
     return construct_expr(ndir, tndarray(data_expr.dtype.element_type, ndim))
 
 
