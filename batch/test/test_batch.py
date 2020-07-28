@@ -65,7 +65,8 @@ class Test(unittest.TestCase):
         builder = self.client.create_batch()
         resources = {
             'cpu': '100m',
-            'memory': '375M'
+            'memory': '375M',
+            'storage': '1Gi'
         }
         # two jobs so the batch msec_mcpu computation is non-trivial
         builder.create_job('ubuntu:18.04', ['echo', 'foo'], resources=resources)
@@ -140,6 +141,17 @@ class Test(unittest.TestCase):
         builder.submit()
         status = j.wait()
         assert j._get_out_of_memory(status, 'main')
+
+    def test_out_of_storage(self):
+        builder = self.client.create_batch()
+        resources = {'cpu': '0.1', 'memory': '10M', 'storage': '5Gi'}
+        j = builder.create_job('ubuntu:18.04',
+                               ['/bin/sh', '-c', 'fallocate -l 100GiB /foo'],
+                               resources=resources)
+        builder.submit()
+        status = j.wait()
+        assert status['state'] == 'Failed', status
+        assert "fallocate failed: No space left on device" in j.log()['main']
 
     def test_unsubmitted_state(self):
         builder = self.client.create_batch()
