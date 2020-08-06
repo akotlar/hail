@@ -1697,8 +1697,6 @@ def pca(entry_expr, k=10, compute_loadings=False) -> Tuple[List[float], Table, T
     return hl.eval(g.eigenvalues), scores, None if t is None else t.drop('eigenvalues', 'scores')
 
 
-<<<<<<< HEAD
-=======
 @typecheck(entry_expr=expr_float64,
            k=int,
            compute_loadings=bool,
@@ -1933,7 +1931,6 @@ def _blanczos_pca(entry_expr, k=10, compute_loadings=False, q_iterations=2, over
     return truncV, truncS, truncW
 
 
->>>>>>> c0a476892... update hail blanczos method for bug, update test, test broken as of this commit
 @typecheck(call_expr=expr_call,
            min_individual_maf=numeric,
            k=nullable(int),
