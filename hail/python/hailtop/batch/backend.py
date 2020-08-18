@@ -220,14 +220,15 @@ class LocalBackend(Backend):
                              f"{memory} "
                              f"{cpu} "
                              f"{job._image} "
-                             f"{job_shell} -c {quoted_job_script}")
+                             f"{job_shell} -c {quoted_job_script} || exit $?")
             else:
-                lines.append(f"{job_shell} -c {quoted_job_script}")
+                lines.append(f"{job_shell} -c {quoted_job_script} || exit $?")
 
             lines += [x for r in job._external_outputs for x in copy_external_output(r)]
             lines += ['\n']
 
         script = "\n".join(lines)
+
         if dry_run:
             print(lines)
         else:
