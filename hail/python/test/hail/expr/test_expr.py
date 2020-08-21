@@ -2323,6 +2323,13 @@ class Tests(unittest.TestCase):
         self.assertAlmostEqual(hl.eval(hl.corr(hl.literal(x1, 'array<float>'), hl.literal(x2, 'array<float>'))),
                                pearsonr(x1[3:], x2[3:])[0])
 
+    def test_array_grouped(self):
+        x = hl.array([0, 1, 2, 3, 4])
+        assert hl.eval(x.grouped(1)) == [[0], [1], [2], [3], [4]]
+        assert hl.eval(x.grouped(2)) == [[0, 1], [2, 3], [4]]
+        assert hl.eval(x.grouped(5)) == [[0, 1, 2, 3, 4]]
+        assert hl.eval(x.grouped(100)) == [[0, 1, 2, 3, 4]]
+
     def test_array_find(self):
         self.assertEqual(hl.eval(hl.find(lambda x: x < 0, hl.null(hl.tarray(hl.tint32)))), None)
         self.assertEqual(hl.eval(hl.find(lambda x: hl.null(hl.tbool), [1, 0, -4, 6])), None)
@@ -3377,3 +3384,15 @@ class Tests(unittest.TestCase):
             hl.tuple([1, 2, 'str'])
         ]
         assert hl.eval(hl._compare(hl.tuple(values), hl.tuple(hl.parse_json(hl.json(v), v.dtype) for v in values)) == 0)
+
+    def test_expr_persist(self):
+        # need to test laziness, so we will overwrite a file
+        ht2 = hl.utils.range_table(100)
+        with tempfile.TemporaryDirectory() as f:
+            hl.utils.range_table(10).write(f, overwrite=True)
+            ht = hl.read_table(f)
+            count1 = ht.aggregate(hl.agg.count(), _localize=False)._persist()
+            assert hl.eval(count1) == 10
+
+            hl.utils.range_table(100).write(f, overwrite=True)
+            assert hl.eval(count1) == 10

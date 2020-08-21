@@ -672,6 +672,32 @@ class ArrayExpression(CollectionExpression):
         indices, aggregations = unify_all(self, zero, body)
         return construct_expr(x, tarray(body.dtype), indices, aggregations)
 
+    @typecheck_method(group_size=expr_int32)
+    def grouped(self, group_size):
+        """Partition an array into fixed size subarrays.
+
+        Examples
+        --------
+        >>> a = hl.array([0, 1, 2, 3, 4])
+
+        >>> hl.eval(a.grouped(2))
+        [[0, 1], [2, 3], [4]]
+
+        Parameters
+        ----------
+        group_size : :class:`.Int32Expression`
+            The number of elements per group.
+
+        Returns
+        -------
+        :class:`.ArrayExpression`.
+        """
+        indices, aggregations = unify_all(self, group_size)
+        stream_ir = ir.StreamGrouped(ir.ToStream(self._ir), group_size._ir)
+        mapping_identifier = Env.get_uid("stream_grouped_map_to_arrays")
+        mapped_to_arrays = ir.StreamMap(stream_ir, mapping_identifier, ir.ToArray(ir.Ref(mapping_identifier)))
+        return construct_expr(ir.ToArray(mapped_to_arrays), tarray(self._type), indices, aggregations)
+
 
 class ArrayStructExpression(ArrayExpression):
     """Expression of type :class:`.tarray` that eventually contains structs.
@@ -3583,8 +3609,8 @@ class NDArrayExpression(Expression):
         if n_sliced_dims > 0:
             slices = []
             for i, s in enumerate(item):
+                dlen = self.shape[i]
                 if isinstance(s, slice):
-                    dlen = self.shape[i]
 
                     if s.step is not None:
                         step = hl.case().when(s.step != 0, s.step) \
@@ -3618,7 +3644,11 @@ class NDArrayExpression(Expression):
 
                     slices.append(hl.tuple((start, stop, step)))
                 else:
-                    slices.append(s)
+                    adjusted_index = hl.if_else(s < 0, s + dlen, s)
+                    checked_int = hl.case().when((adjusted_index < dlen) & (adjusted_index >= 0), adjusted_index).or_error(
+                        hl.str("Index ") + hl.str(s) + hl.str(f" is out of bounds for axis {i} with size ") + hl.str(dlen)
+                    )
+                    slices.append(checked_int)
             return construct_expr(ir.NDArraySlice(self._ir, hl.tuple(slices)._ir),
                                   tndarray(self._type.element_type, n_sliced_dims),
                                   self._indices,

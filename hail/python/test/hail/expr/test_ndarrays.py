@@ -85,6 +85,7 @@ def test_ndarray_slice():
         (rect_prism[0:, :, 1:4:2] + rect_prism[:, :1, 1:4:2],
          np_rect_prism[0:, :, 1:4:2] + np_rect_prism[:, :1, 1:4:2]),
         (rect_prism[0, 0, -3:-1], np_rect_prism[0, 0, -3:-1]),
+        (rect_prism[-1, 0:1, 3:0:-1], np_rect_prism[-1, 0:1, 3:0:-1]),
 
         (flat[15:5:-1], np_flat[15:5:-1]),
         (flat[::-1], np_flat[::-1]),
@@ -139,9 +140,14 @@ def test_ndarray_slice():
     assert hl.eval(rect_prism[:, :, 0:hl.null(hl.tint32):1]) is None
     assert hl.eval(rect_prism[hl.null(hl.tint32), :, :]) is None
 
-    with pytest.raises(FatalError) as exc:
+    with pytest.raises(FatalError, match="Slice step cannot be zero"):
         hl.eval(flat[::0])
-    assert "Slice step cannot be zero" in str(exc)
+
+    with pytest.raises(FatalError, match="Index 3 is out of bounds for axis 0 with size 2"):
+        hl.eval(mat[3, 1:3])
+
+    with pytest.raises(FatalError, match="Index -4 is out of bounds for axis 0 with size 2"):
+        hl.eval(mat[-4, 0:3])
 
 
 def test_ndarray_transposed_slice():
@@ -758,6 +764,43 @@ def test_ndarray_qr():
     with pytest.raises(AssertionError) as exc:
         hl.nd.qr(hl.nd.arange(6))
     assert "requires 2 dimensional" in str(exc)
+
+
+def test_svd():
+    def assert_evals_to_same_svd(nd_expr, np_array, full_matrices=True, compute_uv=True):
+        evaled = hl.eval(hl.nd.svd(nd_expr, full_matrices, compute_uv))
+        np_svd = np.linalg.svd(np_array, full_matrices, compute_uv)
+
+        # check shapes
+        for h, n in zip(evaled, np_svd):
+            assert h.shape == n.shape
+
+        k = min(np_array.shape)
+        rank = np.linalg.matrix_rank(np_array)
+
+        if compute_uv:
+            np.testing.assert_array_almost_equal(evaled[0][:, :rank], np_svd[0][:, :rank])
+            np.testing.assert_array_almost_equal(evaled[1], np_svd[1])
+            np.testing.assert_array_almost_equal(evaled[2][:rank, :], np_svd[2][:rank, :])
+
+        else:
+            np.testing.assert_array_equal(evaled, np_svd)
+
+    np_small_square = np.arange(4).reshape((2, 2))
+    small_square = hl.nd.array(np_small_square)
+    np_rank_2_wide_rectangle = np.arange(12).reshape((4, 3))
+    rank_2_wide_rectangle = hl.nd.array(np_rank_2_wide_rectangle)
+    np_rank_2_tall_rectangle = np_rank_2_wide_rectangle.T
+    rank_2_tall_rectangle = hl.nd.array(np_rank_2_tall_rectangle)
+
+    assert_evals_to_same_svd(small_square, np_small_square)
+    assert_evals_to_same_svd(small_square, np_small_square, compute_uv=False)
+
+    assert_evals_to_same_svd(rank_2_wide_rectangle, np_rank_2_wide_rectangle)
+    assert_evals_to_same_svd(rank_2_wide_rectangle, np_rank_2_wide_rectangle, full_matrices=False)
+
+    assert_evals_to_same_svd(rank_2_tall_rectangle, np_rank_2_tall_rectangle)
+    assert_evals_to_same_svd(rank_2_tall_rectangle, np_rank_2_tall_rectangle, full_matrices=False)
 
 
 def test_numpy_interop():

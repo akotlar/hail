@@ -4,12 +4,14 @@ import random
 import json
 import datetime
 import asyncio
+import urllib.parse
 import logging
 import base64
 import dateutil.parser
 import sortedcontainers
 import aiohttp
-from hailtop.utils import time_msecs, secret_alnum_string
+from hailtop.utils import (
+    retry_long_running, time_msecs, secret_alnum_string)
 
 from ..batch_configuration import DEFAULT_NAMESPACE, PROJECT, \
     WORKER_MAX_IDLE_TIME_MSECS, STANDING_WORKER_MAX_IDLE_TIME_MSECS, \
@@ -40,9 +42,16 @@ class InstancePool:
         self.worker_type = None
         self.worker_cores = None
         self.worker_disk_size_gb = None
+        self.worker_local_ssd_data_disk = None
+        self.worker_pd_ssd_data_disk_size_gb = None
         self.standing_worker_cores = None
         self.max_instances = None
         self.pool_size = None
+
+        # default until we update zones
+        # /regions is slow, don't make it synchronous on startup
+        self.zones = ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-f']
+        self.zone_weights = [1, 1, 1, 1]
 
         self.instances_by_last_updated = sortedcontainers.SortedSet(
             key=lambda instance: instance.last_updated)
@@ -63,16 +72,69 @@ class InstancePool:
 
         self.name_instance = {}
 
+    async def update_zones(self):
+        northamerica_regions = {
+            # 'northamerica-northeast1',
+            'us-central1',
+            'us-east1',
+            'us-east4',
+            'us-west1',
+            'us-west2',
+            'us-west3',
+            'us-west4'
+        }
+
+        new_zones = []
+        new_zone_weights = []
+
+        async for r in await self.compute_client.list('/regions'):
+            name = r['name']
+            if name not in northamerica_regions:
+                continue
+
+            quota_remaining = {
+                q['metric']: q['limit'] - q['usage']
+                for q in r['quotas']
+            }
+
+            remaining = quota_remaining['PREEMPTIBLE_CPUS'] // self.worker_cores
+            if self.worker_local_ssd_data_disk:
+                remaining = min(remaining, quota_remaining['LOCAL_SSD_TOTAL_GB'] // 375)
+            else:
+                remaining = min(remaining, quota_remaining['SSD_TOTAL_GB'] // self.worker_pd_ssd_data_disk_size_gb)
+
+            weight = max(remaining // len(r['zones']), 1)
+            for z in r['zones']:
+                zone_name = os.path.basename(urllib.parse.urlparse(z).path)
+                new_zones.append(zone_name)
+                new_zone_weights.append(weight)
+
+        self.zones = new_zones
+        self.zone_weights = new_zone_weights
+
+        log.info(f'updated zones: zones {self.zones} zone_weights {self.zone_weights}')
+
+    async def update_zones_loop(self):
+        while True:
+            log.info('update zones loop')
+            await self.update_zones()
+            await asyncio.sleep(60)
+
     async def async_init(self):
         log.info('initializing instance pool')
 
         row = await self.db.select_and_fetchone('''
-SELECT worker_type, worker_cores, worker_disk_size_gb, standing_worker_cores, max_instances, pool_size FROM globals;
+SELECT worker_type, worker_cores, worker_disk_size_gb,
+  worker_local_ssd_data_disk, worker_pd_ssd_data_disk_size_gb,
+  standing_worker_cores, max_instances, pool_size
+FROM globals;
 ''')
 
         self.worker_type = row['worker_type']
         self.worker_cores = row['worker_cores']
         self.worker_disk_size_gb = row['worker_disk_size_gb']
+        self.worker_local_ssd_data_disk = row['worker_local_ssd_data_disk']
+        self.worker_pd_ssd_data_disk_size_gb = row['worker_pd_ssd_data_disk_size_gb']
         self.standing_worker_cores = row['standing_worker_cores']
         self.max_instances = row['max_instances']
         self.pool_size = row['pool_size']
@@ -86,37 +148,44 @@ SELECT worker_type, worker_cores, worker_disk_size_gb, standing_worker_cores, ma
         asyncio.ensure_future(self.control_loop())
         asyncio.ensure_future(self.instance_monitoring_loop())
 
+        asyncio.ensure_future(retry_long_running(
+            'update_zones_loop',
+            self.update_zones_loop))
+
     def config(self):
         return {
             'worker_type': self.worker_type,
             'worker_cores': self.worker_cores,
             'worker_disk_size_gb': self.worker_disk_size_gb,
+            'worker_local_ssd_data_disk': self.worker_local_ssd_data_disk,
+            'worker_pd_ssd_data_disk_size_gb': self.worker_pd_ssd_data_disk_size_gb,
             'standing_worker_cores': self.standing_worker_cores,
             'max_instances': self.max_instances,
             'pool_size': self.pool_size
         }
 
-    # FIXME can't adjust worker type, cores because we check if jobs
-    # can be scheduled in the front-end before inserting into the
-    # database
     async def configure(
             self,
-            # worker_type, worker_cores, worker_disk_size_gb,
+            worker_type, worker_cores, worker_disk_size_gb,
+            worker_local_ssd_data_disk, worker_pd_ssd_data_disk_size_gb,
             standing_worker_cores,
             max_instances, pool_size):
         await self.db.just_execute(
-            # worker_type = %s, worker_cores = %s, worker_disk_size_gb = %s,
             '''
 UPDATE globals
-SET standing_worker_cores = %s, max_instances = %s, pool_size = %s;
+SET worker_type = %s, worker_cores = %s, worker_disk_size_gb = %s,
+  worker_local_ssd_data_disk = %s, worker_pd_ssd_data_disk_size_gb = %s,
+  standing_worker_cores = %s, max_instances = %s, pool_size = %s;
 ''',
-            (
-                # worker_type, worker_cores, worker_disk_size_gb,
-                standing_worker_cores,
-                max_instances, pool_size))
-        # self.worker_type = worker_type
-        # self.worker_cores = worker_cores
-        # self.worker_disk_size_gb = worker_disk_size_gb
+            (worker_type, worker_cores, worker_disk_size_gb,
+             worker_local_ssd_data_disk, worker_pd_ssd_data_disk_size_gb,
+             standing_worker_cores,
+             max_instances, pool_size))
+        self.worker_type = worker_type
+        self.worker_cores = worker_cores
+        self.worker_disk_size_gb = worker_disk_size_gb
+        self.worker_local_ssd_data_disk = worker_local_ssd_data_disk
+        self.worker_pd_ssd_data_disk_size_gb = worker_pd_ssd_data_disk_size_gb
         self.standing_worker_cores = standing_worker_cores
         self.max_instances = max_instances
         self.pool_size = pool_size
@@ -183,17 +252,32 @@ SET standing_worker_cores = %s, max_instances = %s, pool_size = %s;
             zones = ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-f']
             zone = random.choice(zones)
         else:
-            zones = ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-f', 'us-east1-a', 'us-east1-b', 'us-east1-c', 'us-east4-a', 'us-east4-b', 'us-east4-c', 'us-west1-a', 'us-west1-b', 'us-west1-c', 'us-west2-a', 'us-west2-b', 'us-west2-c']
-            # based on quotas, us-central1: 4266 over 4 zones, us-east1: 12800 over 3 zones, us-east4: 4266 over 3 zones, us-west1: 4266 over 3 zones, us-west2: 2133 over 3 zones
-            weights = 4 * [266 / 4] + 3 * [12800 / 3] + 3 * [4266 / 3] + 3 * [4266 / 3] + 3 * [2133 / 3]
-
-            zone = random.choices(zones, weights)[0]
+            zone = random.choices(self.zones, self.zone_weights)[0]
 
         activation_token = secrets.token_urlsafe(32)
         instance = await Instance.create(self.app, machine_name, activation_token, cores * 1000, zone)
         self.add_instance(instance)
 
         log.info(f'created {instance}')
+
+        if self.worker_local_ssd_data_disk:
+            worker_data_disk = {
+                'type': 'SCRATCH',
+                'autoDelete': True,
+                'interface': 'NVME',
+                'initializeParams': {
+                    'diskType': f'zones/{zone}/diskTypes/local-ssd'
+                }}
+            worker_data_disk_name = 'nvme0n1'
+        else:
+            worker_data_disk = {
+                'autoDelete': True,
+                'initializeParams': {
+                    'diskType': f'projects/{PROJECT}/zones/{zone}/diskTypes/pd-ssd',
+                    'diskSizeGb': str(self.worker_pd_ssd_data_disk_size_gb)
+                }
+            }
+            worker_data_disk_name = 'sdb'
 
         config = {
             'name': machine_name,
@@ -207,17 +291,11 @@ SET standing_worker_cores = %s, max_instances = %s, pool_size = %s;
                 'boot': True,
                 'autoDelete': True,
                 'initializeParams': {
-                    'sourceImage': f'projects/{PROJECT}/global/images/batch-worker-8',
+                    'sourceImage': f'projects/{PROJECT}/global/images/batch-worker-9',
                     'diskType': f'projects/{PROJECT}/zones/{zone}/diskTypes/pd-ssd',
                     'diskSizeGb': str(self.worker_disk_size_gb)
                 }
-            }, {
-                'type': 'SCRATCH',
-                'autoDelete': True,
-                'interface': 'NVME',
-                'initializeParams': {
-                    'diskType': f'zones/{zone}/diskTypes/local-ssd'
-                }}],
+            }, worker_data_disk],
 
             'networkInterfaces': [{
                 'network': 'global/networks/default',
@@ -254,7 +332,7 @@ nohup /bin/bash run.sh >run.log 2>&1 &
 '''
                 }, {
                     'key': 'run_script',
-                    'value': '''
+                    'value': rf'''
 #!/bin/bash
 set -x
 
@@ -268,33 +346,33 @@ jq '.debug = true' /etc/docker/daemon.json > daemon.json.tmp
 mv daemon.json.tmp /etc/docker/daemon.json
 kill -SIGHUP $(pidof dockerd)
 
-LOCAL_SSD_NAME=$(lsblk | grep '^nvme' | awk '{ print $1 }')
+WORKER_DATA_DISK_NAME="{worker_data_disk_name}"
 
 # format local SSD
-sudo mkfs.xfs -m reflink=1 /dev/$LOCAL_SSD_NAME
-sudo mkdir -p /mnt/disks/$LOCAL_SSD_NAME
-sudo mount -o prjquota /dev/$LOCAL_SSD_NAME /mnt/disks/$LOCAL_SSD_NAME
-sudo chmod a+w /mnt/disks/$LOCAL_SSD_NAME
-XFS_DEVICE=$(xfs_info /mnt/disks/$LOCAL_SSD_NAME | head -n 1 | awk '{ print $1 }' | awk  'BEGIN { FS = "=" }; { print $2 }')
+sudo mkfs.xfs -m reflink=1 /dev/$WORKER_DATA_DISK_NAME
+sudo mkdir -p /mnt/disks/$WORKER_DATA_DISK_NAME
+sudo mount -o prjquota /dev/$WORKER_DATA_DISK_NAME /mnt/disks/$WORKER_DATA_DISK_NAME
+sudo chmod a+w /mnt/disks/$WORKER_DATA_DISK_NAME
+XFS_DEVICE=$(xfs_info /mnt/disks/$WORKER_DATA_DISK_NAME | head -n 1 | awk '{{ print $1 }}' | awk  'BEGIN {{ FS = "=" }}; {{ print $2 }}')
 
 # reconfigure docker to use local SSD
 sudo service docker stop
-sudo mv /var/lib/docker /mnt/disks/$LOCAL_SSD_NAME/docker
-sudo ln -s /mnt/disks/$LOCAL_SSD_NAME/docker /var/lib/docker
+sudo mv /var/lib/docker /mnt/disks/$WORKER_DATA_DISK_NAME/docker
+sudo ln -s /mnt/disks/$WORKER_DATA_DISK_NAME/docker /var/lib/docker
 sudo service docker start
 
 # reconfigure /batch and /logs and /gcsfuse to use local SSD
-sudo mkdir -p /mnt/disks/$LOCAL_SSD_NAME/batch/
-sudo ln -s /mnt/disks/$LOCAL_SSD_NAME/batch /batch
+sudo mkdir -p /mnt/disks/$WORKER_DATA_DISK_NAME/batch/
+sudo ln -s /mnt/disks/$WORKER_DATA_DISK_NAME/batch /batch
 
-sudo mkdir -p /mnt/disks/$LOCAL_SSD_NAME/logs/
-sudo ln -s /mnt/disks/$LOCAL_SSD_NAME/logs /logs
+sudo mkdir -p /mnt/disks/$WORKER_DATA_DISK_NAME/logs/
+sudo ln -s /mnt/disks/$WORKER_DATA_DISK_NAME/logs /logs
 
-sudo mkdir -p /mnt/disks/$LOCAL_SSD_NAME/gcsfuse/
-sudo ln -s /mnt/disks/$LOCAL_SSD_NAME/gcsfuse /gcsfuse
+sudo mkdir -p /mnt/disks/$WORKER_DATA_DISK_NAME/gcsfuse/
+sudo ln -s /mnt/disks/$WORKER_DATA_DISK_NAME/gcsfuse /gcsfuse
 
-sudo mkdir -p /mnt/disks/$LOCAL_SSD_NAME/xfsquota/
-sudo ln -s /mnt/disks/$LOCAL_SSD_NAME/xfsquota /xfsquota
+sudo mkdir -p /mnt/disks/$WORKER_DATA_DISK_NAME/xfsquota/
+sudo ln -s /mnt/disks/$WORKER_DATA_DISK_NAME/xfsquota /xfsquota
 
 touch /xfsquota/projects
 touch /xfsquota/projid
@@ -320,6 +398,67 @@ ZONE=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/zone 
 
 BATCH_WORKER_IMAGE=$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/batch_worker_image")
 
+# Setup fluentd
+touch /worker.log
+touch /run.log
+
+sudo rm /etc/google-fluentd/config.d/*  # remove unused config files
+
+sudo tee /etc/google-fluentd/config.d/syslog.conf <<EOF
+<source>
+  @type tail
+  format syslog
+  path /var/log/syslog
+  pos_file /var/lib/google-fluentd/pos/syslog.pos
+  read_from_head true
+  tag syslog
+</source>
+EOF
+
+sudo tee /etc/google-fluentd/config.d/worker-log.conf <<EOF {{
+<source>
+    @type tail
+    format json
+    path /worker.log
+    pos_file /var/lib/google-fluentd/pos/worker-log.pos
+    read_from_head true
+    tag worker.log
+</source>
+
+<filter worker.log>
+    @type record_transformer
+    enable_ruby
+    <record>
+        severity \${{ record["levelname"] }}
+        timestamp \${{ record["asctime"] }}
+    </record>
+</filter>
+EOF
+
+sudo tee /etc/google-fluentd/config.d/run-log.conf <<EOF
+<source>
+    @type tail
+    format none
+    path /run.log
+    pos_file /var/lib/google-fluentd/pos/run-log.pos
+    read_from_head true
+    tag run.log
+</source>
+EOF
+
+sudo cp /etc/google-fluentd/google-fluentd.conf /etc/google-fluentd/google-fluentd.conf.bak
+head -n -1 /etc/google-fluentd/google-fluentd.conf.bak | sudo tee /etc/google-fluentd/google-fluentd.conf
+sudo tee -a /etc/google-fluentd/google-fluentd.conf <<EOF
+  labels {{
+    "namespace": "$NAMESPACE",
+    "instance_id": "$INSTANCE_ID"
+  }}
+</match>
+EOF
+rm /etc/google-fluentd/google-fluentd.conf.bak
+
+sudo service google-fluentd restart
+
 # retry once
 docker pull $BATCH_WORKER_IMAGE || \
     (echo 'pull failed, retrying' && sleep 15 && docker pull $BATCH_WORKER_IMAGE)
@@ -337,7 +476,7 @@ docker run \
     -e PROJECT=$PROJECT \
     -e WORKER_CONFIG=$WORKER_CONFIG \
     -e MAX_IDLE_TIME_MSECS=$MAX_IDLE_TIME_MSECS \
-    -e LOCAL_SSD_MOUNT=/mnt/disks/$LOCAL_SSD_NAME \
+    -e WORKER_DATA_DISK_MOUNT=/mnt/disks/$WORKER_DATA_DISK_NAME \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v /usr/bin/docker:/usr/bin/docker \
     -v /usr/sbin/xfs_quota:/usr/sbin/xfs_quota \
@@ -345,7 +484,7 @@ docker run \
     -v /logs:/logs \
     -v /gcsfuse:/gcsfuse:shared \
     -v /xfsquota:/xfsquota \
-    --mount type=bind,source=/mnt/disks/$LOCAL_SSD_NAME,target=/host \
+    --mount type=bind,source=/mnt/disks/$WORKER_DATA_DISK_NAME,target=/host \
     -p 5000:5000 \
     --device /dev/fuse \
     --device $XFS_DEVICE \
@@ -371,7 +510,7 @@ NAME=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/name 
 journalctl -u docker.service > dockerd.log
 
 # this has to match LogStore.worker_log_path
-gsutil -m cp run.log worker.log /var/log/syslog dockerd.log  gs://$WORKER_LOGS_BUCKET_NAME/batch/logs/$INSTANCE_ID/worker/$NAME/
+gsutil -m cp dockerd.log gs://$WORKER_LOGS_BUCKET_NAME/batch/logs/$INSTANCE_ID/worker/$NAME/
 '''
                 }, {
                     'key': 'activation_token',

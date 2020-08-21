@@ -34,11 +34,11 @@ abstract class PNDArray extends PType {
 
   def numElements(shape: IndexedSeq[Code[Long]], mb: EmitMethodBuilder[_]): Code[Long]
 
-  def makeShapeBuilder(shapeArray: IndexedSeq[Code[Long]]): StagedRegionValueBuilder => Code[Unit]
+  def makeShapeBuilder(shapeArray: IndexedSeq[Value[Long]]): StagedRegionValueBuilder => Code[Unit]
 
-  def makeRowMajorStridesBuilder(sourceShapeArray: IndexedSeq[Code[Long]], mb: EmitMethodBuilder[_]): StagedRegionValueBuilder => Code[Unit]
+  def makeRowMajorStridesBuilder(sourceShapeArray: IndexedSeq[Value[Long]], mb: EmitMethodBuilder[_]): StagedRegionValueBuilder => Code[Unit]
 
-  def makeColumnMajorStridesBuilder(sourceShapeArray: IndexedSeq[Code[Long]], mb: EmitMethodBuilder[_]): StagedRegionValueBuilder => Code[Unit]
+  def makeColumnMajorStridesBuilder(sourceShapeArray: IndexedSeq[Value[Long]], mb: EmitMethodBuilder[_]): StagedRegionValueBuilder => Code[Unit]
 
   def setElement(indices: IndexedSeq[Value[Long]], ndAddress: Value[Long], newElement: Code[_], mb: EmitMethodBuilder[_]): Code[Unit]
 
@@ -50,11 +50,19 @@ abstract class PNDArray extends PType {
 
   def unlinearizeIndexRowMajor(index: Code[Long], shapeArray: IndexedSeq[Value[Long]], mb: EmitMethodBuilder[_]): (Code[Unit], IndexedSeq[Value[Long]])
 
-  def construct(shapeBuilder: StagedRegionValueBuilder => Code[Unit], stridesBuilder: StagedRegionValueBuilder => Code[Unit], data: Code[Long], mb: EmitMethodBuilder[_]): Code[Long]
+  def construct(
+    shapeBuilder: StagedRegionValueBuilder => Code[Unit],
+    stridesBuilder: StagedRegionValueBuilder => Code[Unit],
+    data: Code[Long],
+    mb: EmitMethodBuilder[_],
+    region: Value[Region]
+  ): Code[Long]
 }
 
 abstract class PNDArrayValue extends PValue {
   def apply(indices: IndexedSeq[Value[Long]], mb: EmitMethodBuilder[_]): Value[_]
+
+  def shapes(): IndexedSeq[Value[Long]]
 
   override def pt: PNDArray = ???
 
@@ -64,5 +72,7 @@ abstract class PNDArrayValue extends PValue {
 }
 
 abstract class PNDArrayCode extends PCode {
+  override def pt: PNDArray
+
   def memoize(cb: EmitCodeBuilder, name: String): PNDArrayValue
 }

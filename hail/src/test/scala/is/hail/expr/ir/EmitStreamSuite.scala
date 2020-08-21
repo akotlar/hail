@@ -187,8 +187,9 @@ class EmitStreamSuite extends HailSuite {
     val f = compile1[Int, Unit] { (mb, n) =>
       val r = checkedRange(0, n, "range", mb)
       var checkedInner: CheckedStream[Code[Int]] = null
-      val outer = r.stream.grouped(2).map { inner =>
-        checkedInner = new CheckedStream(inner, "inner", mb)
+      val dummyRegion = StagedRegion(new Value[Region] { def get: Code[Region] = Code._null[Region] }, allowSubregions = false)
+      val outer = Stream.grouped(mb, _ => r.stream, 2, dummyRegion).map { inner =>
+        checkedInner = new CheckedStream(inner(dummyRegion), "inner", mb)
         checkedInner.stream
       }
       val checkedOuter = new CheckedStream(outer, "outer", mb)
@@ -210,8 +211,9 @@ class EmitStreamSuite extends HailSuite {
     val f = compile1[Int, Unit] { (mb, n) =>
       val r = checkedRange(0, n, "range", mb)
       var checkedInner: CheckedStream[Code[Int]] = null
-      val outer = r.stream.grouped(2).map { inner =>
-        val take = Stream.zip(inner, Stream.range(mb, 0, 1, 1))
+      val dummyRegion = StagedRegion(new Value[Region] { def get: Code[Region] = Code._null[Region] }, allowSubregions = false)
+      val outer = Stream.grouped(mb, _ => r.stream, 2, dummyRegion).map { inner =>
+        val take = Stream.zip(inner(dummyRegion), Stream.range(mb, 0, 1, 1))
                          .map { case (i, count) => i }
         checkedInner = new CheckedStream(take, "inner", mb)
         checkedInner.stream
@@ -257,10 +259,11 @@ class EmitStreamSuite extends HailSuite {
   @Test def testES2kWayMerge() {
     def merge(k: Int) {
       val f = compile1[Int, Unit] { (mb, _) =>
+        val dummyRegion = StagedRegion(new Value[Region] { def get: Code[Region] = Code._null[Region] }, allowSubregions = false)
         val ranges = Array.tabulate(k)(i => checkedRange(0 + i, 5 + i, s"s$i", mb, print = false))
 
         val z = Stream.kWayMerge[Int](
-           mb, ranges.map(_.stream),
+           mb, ranges.map(cs => (_: StagedRegion) => cs.stream), dummyRegion,
            (li, lv, ri, rv) => Code.memoize(lv, "lv", rv, "rv") { (lv, rv) =>
              lv < rv || (lv.ceq(rv) && li < ri)
            })
@@ -291,6 +294,7 @@ class EmitStreamSuite extends HailSuite {
   )(call: (F, Region, T) => Long): T => IndexedSeq[Any] = {
     val fb = EmitFunctionBuilder[F](ctx, "F", (classInfo[Region]: ParamType) +: inputTypes.map(pt => EmitParamType(pt): ParamType), LongInfo)
     val mb = fb.apply_method
+    val region = StagedRegion(mb.getCodeParam[Region](1), allowSubregions = false)
     val ir = streamIR.deepCopy()
     InferPType(ir)
     val eltType = ir.pType.asInstanceOf[PStream].elementType
@@ -300,10 +304,10 @@ class EmitStreamSuite extends HailSuite {
         case s => s
       }
       TypeCheck(s)
-      EmitStream.emit(new Emit(ctx, fb.ecb), s, mb, Env.empty, None)
+      EmitStream.emit(new Emit(ctx, fb.ecb), s, mb, region, Env.empty, None)
     }
     mb.emit {
-      val arrayt = EmitStream.toArray(mb, PCanonicalArray(eltType), stream)
+      val arrayt = stream.map(s => EmitStream.toArray(mb, PCanonicalArray(eltType), s.asStream, region))
       Code(arrayt.setup, arrayt.m.mux(0L, arrayt.v))
     }
     val f = fb.resultWithIndex()
@@ -347,24 +351,24 @@ class EmitStreamSuite extends HailSuite {
   private def evalStreamLen(streamIR: IR): Option[Int] = {
     val fb = EmitFunctionBuilder[Region, Int](ctx, "eval_stream_len")
     val mb = fb.apply_method
+    val region = StagedRegion(mb.getCodeParam[Region](1), allowSubregions = false)
     val ir = streamIR.deepCopy()
     InferPType(ir)
     val optStream = ExecuteContext.scoped() { ctx =>
       TypeCheck(ir)
-      EmitStream.emit(new Emit(ctx, fb.ecb), ir, mb, Env.empty, None)
+      EmitStream.emit(new Emit(ctx, fb.ecb), ir, mb, region, Env.empty, None)
     }
-    val L = CodeLabel()
     val len = mb.newLocal[Int]()
     implicit val emitStreamCtx = EmitStreamContext(mb)
-    fb.emit(
-      Code(
-        optStream(
-          Code(len := 0, L.goto),
-          { case EmitStream.SizedStream(setup, _, length) =>
-            Code(setup, len := length.getOrElse(-1), L.goto)
-          }),
-        L,
-        len))
+    fb.emit(Code(
+      optStream.setup,
+      optStream.m.mux(
+        len := 0,
+        {
+          val EmitStream.SizedStream(setup, _, length) = optStream.pv.asStream.stream
+          Code(setup, len := length.getOrElse(-1))
+        }),
+      len))
     val f = fb.resultWithIndex()
     Region.scoped { r =>
       val len = f(0, r)(r)

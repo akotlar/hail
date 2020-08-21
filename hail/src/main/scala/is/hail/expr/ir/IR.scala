@@ -1,12 +1,11 @@
 package is.hail.expr.ir
 
-import is.hail.annotations.{Annotation, Region, UnsafeRow}
+import is.hail.annotations.{Annotation, Region}
 import is.hail.asm4s.Value
 import is.hail.expr.ir.ArrayZipBehavior.ArrayZipBehavior
 import is.hail.expr.ir.EmitStream.SizedStream
 import is.hail.expr.ir.agg.{AggStateSig, PhysicalAggSig}
 import is.hail.expr.ir.functions._
-import is.hail.types.{RStruct, RTable}
 import is.hail.types.encoded._
 import is.hail.types.physical._
 import is.hail.types.virtual._
@@ -96,7 +95,9 @@ final case class I32(x: Int) extends IR
 final case class I64(x: Long) extends IR
 final case class F32(x: Float) extends IR
 final case class F64(x: Double) extends IR
-final case class Str(x: String) extends IR
+final case class Str(x: String) extends IR {
+  override def toString(): String = s"""Str("${StringEscapeUtils.escapeString(x)}")"""
+}
 final case class True() extends IR
 final case class False() extends IR
 final case class Void() extends IR
@@ -403,11 +404,24 @@ object NDArrayQR {
     "complete" -> PCanonicalTuple(false, PCanonicalNDArray(PFloat64Required, 2), PCanonicalNDArray(PFloat64Required, 2)))
 }
 
+object NDArraySVD {
+  def pTypes(computeUV: Boolean): PType = {
+    if (computeUV) {
+      PCanonicalTuple(false, PCanonicalNDArray(PFloat64Required, 2), PCanonicalNDArray(PFloat64Required, 1), PCanonicalNDArray(PFloat64Required, 2))
+    }
+    else {
+      PCanonicalNDArray(PFloat64Required, 1)
+    }
+  }
+}
+
 object NDArrayInv {
   val pType = PCanonicalNDArray(PFloat64Required, 2)
 }
 
 final case class NDArrayQR(nd: IR, mode: String) extends IR
+
+final case class NDArraySVD(nd: IR, fullMatrices: Boolean, computeUV: Boolean) extends IR
 
 final case class NDArrayInv(nd: IR) extends IR
 
@@ -652,7 +666,7 @@ abstract class PartitionReader {
     requestedType: Type,
     emitter: Emit[C],
     mb: EmitMethodBuilder[C],
-    region: Value[Region],
+    region: StagedRegion,
     env0: Emit.E,
     container: Option[AggContainer]): COption[SizedStream]
 
@@ -664,7 +678,7 @@ abstract class PartitionWriter {
     context: EmitCode,
     eltType: PStruct,
     mb: EmitMethodBuilder[_],
-    region: Value[Region],
+    region: StagedRegion,
     stream: SizedStream): EmitCode
 
   def ctxType: Type
